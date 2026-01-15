@@ -37,9 +37,6 @@ def validate_text(text, last_text=None):
     if len(text) > 600:
         return False, f"Length {len(text)} > 600"
         
-    if last_text and text == last_text:
-        return False, "Duplicate text"
-        
     return True, "Valid"
 
 def process_text(text, last_text=None):
