@@ -3,3 +3,4 @@ __pycache__/
 .trae/
 audio/
 *.log
+text/
