@@ -156,6 +156,27 @@ class Config:
     def game_window_height(self):
         return self.config.getint('WordGame', 'game_window_height', fallback=500)
 
+    # ContextMenu Settings
+    @property
+    def menu_bg_color(self):
+        return self.config.get('ContextMenu', 'bg_color', fallback='#2b2b2b')
+
+    @property
+    def menu_text_color(self):
+        return self.config.get('ContextMenu', 'text_color', fallback='#ffffff')
+
+    @property
+    def menu_border_color(self):
+        return self.config.get('ContextMenu', 'border_color', fallback='#3d3d3d')
+
+    @property
+    def menu_hover_bg_color(self):
+        return self.config.get('ContextMenu', 'hover_bg_color', fallback='#3d3d3d')
+
+    @property
+    def menu_font_size(self):
+        return self.config.getint('ContextMenu', 'font_size', fallback=14)
+
 # Global instance
 try:
     current_dir = os.path.dirname(os.path.abspath(__file__))

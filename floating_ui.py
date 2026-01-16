@@ -619,10 +619,11 @@ class AudioListItem(QWidget):
     play_requested = pyqtSignal(str)
     game_requested = pyqtSignal(str)
     
-    def __init__(self, file_path, player, parent=None):
+    def __init__(self, file_path, player, list_panel, parent=None):
         super().__init__(parent)
         self.file_path = file_path
         self.player = player
+        self.list_panel = list_panel
         self.filename = os.path.basename(file_path)
         self.processed_name = self._process_filename(self.filename)
         
@@ -709,6 +710,9 @@ class AudioListItem(QWidget):
         
         full_processed = self.filename.split('_')[0]
         self.label.setToolTip(full_processed)
+
+        self.label.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.label.customContextMenuRequested.connect(self.show_context_menu)
         
         layout.addWidget(self.label)
         layout.addStretch()
@@ -791,13 +795,87 @@ class AudioListItem(QWidget):
             """)
         super().leaveEvent(event)
     
-    def delete_file(self):
-        try:
-            if self.player.is_playing(self.file_path):
-                self.player.stop()
-            os.remove(self.file_path)
-        except Exception as e:
-            print(f"Error deleting file: {e}")
+    def show_context_menu(self, pos):
+        menu = QMenu(self)
+        
+        # Styling
+        menu.setStyleSheet(f"""
+            QMenu {{
+                background-color: {app_config.menu_bg_color};
+                color: {app_config.menu_text_color};
+                border: 1px solid {app_config.menu_border_color};
+                font-size: {app_config.menu_font_size}px;
+                padding: 5px;
+            }}
+            QMenu::item {{
+                padding: 5px 20px;
+                border-radius: 4px;
+            }}
+            QMenu::item:selected {{
+                background-color: {app_config.menu_hover_bg_color};
+            }}
+        """)
+        
+        del_action = QAction("删除", self)
+        del_action.triggered.connect(self.delete_item)
+        menu.addAction(del_action)
+        
+        # Handle collapse prevention
+        self.list_panel.is_menu_open = True
+        menu.aboutToHide.connect(lambda: setattr(self.list_panel, 'is_menu_open', False))
+        
+        menu.exec(self.label.mapToGlobal(pos))
+
+    def delete_item(self):
+        # 1. Stop playback if playing
+        if self.player.is_playing(self.file_path):
+            self.player.stop()
+
+        # 2. Define files to delete
+        files_to_delete = [self.file_path]
+        
+        dirname = os.path.dirname(self.file_path)
+        filename = os.path.basename(self.file_path)
+        # filename is name_date.wav
+        
+        parts = filename.rsplit('_', 1)
+        if len(parts) == 2:
+            text_part = parts[0]
+            date_part = parts[1] # includes .wav
+            
+            # Variants
+            for speed in ['0.5', '0.75']:
+                variant_name = f"{text_part}@{speed}_{date_part}"
+                files_to_delete.append(os.path.join(dirname, variant_name))
+            
+            # Text file
+            txt_filename = filename.rsplit('.', 1)[0] + ".txt"
+            
+            # Resolve text dir
+            project_root = os.path.dirname(dirname)
+            text_dir = os.path.join(project_root, app_config.game_text_folder)
+            
+            files_to_delete.append(os.path.join(text_dir, txt_filename))
+        
+        # 3. Delete loop
+        for fpath in files_to_delete:
+            fname = os.path.basename(fpath)
+            try:
+                if os.path.exists(fpath):
+                    # Check if file is open? os.remove usually fails if open.
+                    os.remove(fpath)
+                    print(f"[Delete] Removed: {fname}")
+                elif "text" in fpath and not os.path.exists(os.path.dirname(fpath)):
+                     # Text folder doesn't exist, ignore
+                     pass
+                elif not os.path.exists(fpath) and "text" not in fpath:
+                    # Audio File not found
+                    print(f"[Delete] Warning: File not found - {fname}")
+            except Exception as e:
+                print(f"[Delete] Warning: {e} - {fname}")
+
+        # 4. Remove from UI
+        self.deleteLater()
 
 class ListPanel(QWidget):
     game_requested = pyqtSignal(str)
@@ -806,6 +884,7 @@ class ListPanel(QWidget):
         super().__init__()
         self.player = player
         self.ball_widget = ball_widget 
+        self.is_menu_open = False # Added flag
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool | Qt.WindowType.WindowStaysOnTopHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         
@@ -927,7 +1006,7 @@ class ListPanel(QWidget):
             self.scroll_layout.insertWidget(0, lbl)
         else:
             for f in files:
-                item = AudioListItem(f, self.player)
+                item = AudioListItem(f, self.player, self)
                 item.play_requested.connect(self.on_play_requested)
                 item.game_requested.connect(self.game_requested.emit)
                 self.scroll_layout.insertWidget(self.scroll_layout.count()-1, item)
@@ -945,6 +1024,10 @@ class ListPanel(QWidget):
 
     def leaveEvent(self, event):
         cursor_pos = QCursor.pos()
+        if self.is_menu_open:
+            super().leaveEvent(event)
+            return
+
         if not self.ball_widget.geometry().contains(cursor_pos):
              self.ball_widget.collapse_panel()
         super().leaveEvent(event)
@@ -1055,6 +1138,10 @@ class FloatingBall(QWidget):
     def leaveEvent(self, event):
         cursor_pos = QCursor.pos()
         if self.panel.isVisible():
+            if self.panel.is_menu_open:
+                super().leaveEvent(event)
+                return
+
             if not self.panel.geometry().contains(cursor_pos):
                 self.collapse_panel()
         super().leaveEvent(event)
