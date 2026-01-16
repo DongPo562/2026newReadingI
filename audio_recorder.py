@@ -217,6 +217,21 @@ class AudioRecorder(threading.Thread):
             sf.write(filepath, final_data, self.samplerate)
             print(f"[Recorder] Saved to: {filepath}")
 
+            # Save Text File (Word Game)
+            try:
+                text_folder = app_config.game_text_folder
+                if not os.path.exists(text_folder):
+                    os.makedirs(text_folder)
+                
+                text_filename = f"{base_name}_{date_str}.txt"
+                text_filepath = os.path.join(text_folder, text_filename)
+                
+                with open(text_filepath, 'w', encoding='utf-8') as f:
+                    f.write(self.chosen_words)
+                print(f"[Recorder] Saved text to: {text_filepath}")
+            except Exception as e:
+                print(f"[Recorder] Error saving text file: {e}")
+
             # Generate Slow Versions
             if app_config.slow_generate_versions:
                 from audio_processor import generate_slow_audio

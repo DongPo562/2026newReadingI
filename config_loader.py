@@ -135,6 +135,27 @@ class Config:
         except:
             return [0.5, 0.75]
 
+    # WordGame Settings
+    @property
+    def game_min_text_length(self):
+        return self.config.getint('WordGame', 'min_text_length', fallback=30)
+
+    @property
+    def game_text_folder(self):
+        return self.config.get('WordGame', 'text_folder', fallback='text')
+
+    @property
+    def game_clickable_text_color(self):
+        return self.config.get('WordGame', 'clickable_text_color', fallback='#FFEB3B')
+
+    @property
+    def game_window_width(self):
+        return self.config.getint('WordGame', 'game_window_width', fallback=400)
+
+    @property
+    def game_window_height(self):
+        return self.config.getint('WordGame', 'game_window_height', fallback=500)
+
 # Global instance
 try:
     current_dir = os.path.dirname(os.path.abspath(__file__))
