@@ -9,11 +9,74 @@ from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QPushButton, QScrollArea, QFrame, QMenu, 
                              QGraphicsDropShadowEffect, QSizePolicy, QLayout)
 from PyQt6.QtCore import (Qt, QTimer, QPoint, QRect, QPropertyAnimation, 
-                          QEasingCurve, pyqtSignal, QSize, QEvent, QUrl, QObject)
+                          QEasingCurve, pyqtSignal, QSize, QEvent, QUrl, QObject, QFileSystemWatcher, pyqtProperty)
 from PyQt6.QtGui import (QPainter, QColor, QBrush, QPen, QCursor, QLinearGradient, 
-                         QPainterPath, QIcon, QAction, QRegion)
+                         QPainterPath, QIcon, QAction, QRegion, QFont)
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput, QMediaDevices
 from config_loader import app_config
+
+class ToggleSwitch(QWidget):
+    toggled = pyqtSignal(bool)
+
+    def __init__(self, parent=None, width=50, height=26):
+        super().__init__(parent)
+        self.setFixedSize(width, height)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._checked = False
+        self._thumb_radius = height // 2 - 2
+        self._thumb_pos = 2.0
+        self._anim = QPropertyAnimation(self, b"thumb_pos", self)
+        self._anim.setDuration(250)
+        self._anim.setEasingCurve(QEasingCurve.Type.OutQuad)
+
+    @pyqtProperty(float)
+    def thumb_pos(self):
+        return self._thumb_pos
+
+    @thumb_pos.setter
+    def thumb_pos(self, pos):
+        self._thumb_pos = pos
+        self.update()
+
+    def setChecked(self, checked):
+        if self._checked != checked:
+            self._checked = checked
+            self.toggled.emit(checked)
+            
+        target = self.width() - self._thumb_radius * 2 - 2 if self._checked else 2.0
+        
+        if abs(self._thumb_pos - target) > 0.1:
+            self._anim.stop()
+            self._anim.setStartValue(self._thumb_pos)
+            self._anim.setEndValue(target)
+            self._anim.start()
+        else:
+            self.update()
+
+    def isChecked(self):
+        return self._checked
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.setChecked(not self._checked)
+        super().mouseReleaseEvent(event)
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Draw Track
+        track_opacity = 0.9 if self._checked else 0.5
+        track_color = QColor(app_config.ui_play_button_color) if self._checked else QColor("#757575")
+        
+        p.setBrush(track_color)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.drawRoundedRect(0, 0, self.width(), self.height(), self.height() / 2, self.height() / 2)
+
+        # Draw Thumb
+        p.setBrush(QColor("white"))
+        p.drawEllipse(QPoint(int(self._thumb_pos + self._thumb_radius), int(self.height() / 2)), 
+                      self._thumb_radius, self._thumb_radius)
 
 class AudioPlayer(QObject):
     state_changed = pyqtSignal(bool) # True if playing, False if stopped
@@ -45,61 +108,69 @@ class AudioPlayer(QObject):
         self.audio_output.setDevice(default_device)
         # print(f"Audio Output Switched to: {default_device.description()}")
 
-    def play(self, file_path):
+    def play(self, file_path, clear_queue=True):
         # Ensure correct device before playing
         self._update_audio_output()
         
         # Determine mode and setup queue
         mode = app_config.play_last_mode
         
-        # Stop current if any
-        self.player.stop()
-        self.playback_queue = []
-        self.current_queue_index = 0
-        self.current_repeat = 0
+        # Calculate sequence
+        new_sequence = self._get_sequence_for_file(file_path, mode)
         
+        if clear_queue:
+            self.player.stop()
+            self.playback_queue = new_sequence
+            self.current_queue_index = 0
+            self.current_repeat = 0
+            self.play_next_in_queue()
+        else:
+            # Append to queue
+            # If currently playing, it will continue to next items in queue
+            # If queue was empty (but player state might be stopped), start playing
+            was_empty = len(self.playback_queue) == 0
+            self.playback_queue.extend(new_sequence)
+            
+            if was_empty or self.player.playbackState() != QMediaPlayer.PlaybackState.PlayingState:
+                # If we were at the end of queue, current_queue_index might be equal to len
+                # We need to ensure we continue playing
+                if self.current_queue_index >= len(self.playback_queue) - len(new_sequence):
+                     self.play_next_in_queue()
+
+    def auto_play(self, file_path):
+        print(f"AutoPlay Recording completed, auto-playing: {os.path.basename(file_path)}")
+        if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
+            print("AutoPlay Queued: waiting for current playback to finish")
+            self.play(file_path, clear_queue=False)
+        else:
+            self.play(file_path, clear_queue=True)
+
+    def _get_sequence_for_file(self, file_path, mode):
         # Base logic: find variations
-        # file_path is the 1.0x version (filtered list)
-        # Parse filename to get parts
         dirname = os.path.dirname(file_path)
         filename = os.path.basename(file_path)
         
-        # mental models are_2026-01-14.wav
         parts = filename.rsplit('_', 1)
         if len(parts) != 2:
-            # Fallback normal play
-            self.playback_queue = [file_path]
-        else:
-            text_part = parts[0]
-            date_part = parts[1]
+            return [file_path]
             
-            if mode == 'mode1': # Progressive
-                # 0.5, 0.75, 1.0
-                speeds = [0.5, 0.75]
-                files = []
-                for s in speeds:
-                    fname = f"{text_part}@{s}_{date_part}"
-                    fpath = os.path.join(dirname, fname)
-                    if os.path.exists(fpath):
-                        files.append(fpath)
-                files.append(file_path) # 1.0x
-                
-                # Loop 3 times? "自动循环播放 3 次" -> Means the sequence [0.5, 0.75, 1.0] plays 3 times?
-                # Or just plays once? "三次播放的文件依次为...". Seems it means 1 cycle of 3 files.
-                # "自动循环播放 3 次" usually means Play (Seq) -> Play (Seq) -> Play (Seq).
-                # But description says:
-                # "三次播放的文件依次为：第一次：0.5... 第二次：0.75... 第三次：1..."
-                # This sounds like ONE sequence of 3 files. "Loop 3 times" might be confusing wording for "Play 3 variations".
-                # Let's assume it plays the sequence [0.5, 0.75, 1.0] once.
-                
-                self.playback_queue = files
-                
-            else: # mode2 (Repeat)
-                # Play 1.0x for N times
-                count = app_config.play_mode2_loop_count
-                self.playback_queue = [file_path] * count
-
-        self.play_next_in_queue()
+        text_part = parts[0]
+        date_part = parts[1]
+        
+        if mode == 'mode1': # Progressive
+            speeds = [0.5, 0.75]
+            files = []
+            for s in speeds:
+                fname = f"{text_part}@{s}_{date_part}"
+                fpath = os.path.join(dirname, fname)
+                if os.path.exists(fpath):
+                    files.append(fpath)
+            files.append(file_path) # 1.0x
+            return files
+            
+        else: # mode2 (Repeat)
+            count = app_config.play_mode2_loop_count
+            return [file_path] * count
 
     def play_next_in_queue(self):
         if self.current_queue_index < len(self.playback_queue):
@@ -527,29 +598,43 @@ class ModeSelector(QWidget):
     def init_ui(self):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(10, 5, 10, 5)
-        layout.setSpacing(10)
+        layout.setSpacing(app_config.ui_top_bar_spacing)
         
         # Mode 1 Button
         self.mode1_btn = QPushButton("Mode1")
+        self.mode1_btn.setFixedSize(app_config.ui_mode_btn_width, app_config.ui_mode_btn_height)
         self.mode1_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.mode1_btn.clicked.connect(lambda: self.set_mode('mode1'))
         
         # Mode 2 Button
         self.mode2_btn = QPushButton("Mode2")
+        self.mode2_btn.setFixedSize(app_config.ui_mode_btn_width, app_config.ui_mode_btn_height)
         self.mode2_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.mode2_btn.clicked.connect(lambda: self.set_mode('mode2'))
         
         # Loop Count Label (Clickable)
         self.loop_lbl = QPushButton(f"x{app_config.play_mode2_loop_count}")
         self.loop_lbl.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.loop_lbl.setFixedWidth(30)
+        self.loop_lbl.setFixedSize(app_config.ui_loop_lbl_width, app_config.ui_loop_lbl_height)
         self.loop_lbl.setStyleSheet("color: white; border: none; font-weight: bold;")
         self.loop_lbl.clicked.connect(self.toggle_loop_count)
+
+        # Auto Switch
+        self.auto_switch = ToggleSwitch(width=app_config.ui_toggle_width, height=app_config.ui_toggle_height)
+        self.auto_switch.setChecked(app_config.play_auto_enabled)
+        self.auto_switch.toggled.connect(self.on_auto_toggled)
+        self.auto_switch.setToolTip("录音完成后自动播放")
         
         layout.addWidget(self.mode1_btn)
         layout.addWidget(self.mode2_btn)
         layout.addWidget(self.loop_lbl)
+        layout.addWidget(self.auto_switch)
         layout.addStretch()
+
+    def on_auto_toggled(self, checked):
+        app_config.play_auto_enabled = checked
+        print(f"AutoPlay Feature {'enabled' if checked else 'disabled'}")
+        self.interaction.emit()
 
     def set_mode(self, mode):
         app_config.play_last_mode = mode
@@ -601,11 +686,15 @@ class ModeSelector(QWidget):
         if mode == 'mode1':
             self.mode1_btn.setStyleSheet(active_style)
             self.mode2_btn.setStyleSheet(inactive_style)
-            self.loop_lbl.setVisible(False)
+            self.loop_lbl.setVisible(True)
+            self.loop_lbl.setEnabled(False)
+            self.loop_lbl.setStyleSheet("color: gray; border: none; font-weight: bold;")
         else:
             self.mode1_btn.setStyleSheet(inactive_style)
             self.mode2_btn.setStyleSheet(active_style)
             self.loop_lbl.setVisible(True)
+            self.loop_lbl.setEnabled(True)
+            self.loop_lbl.setStyleSheet("color: white; border: none; font-weight: bold;")
             self.loop_lbl.setText(f"x{app_config.play_mode2_loop_count}")
 
 class ClickableLabel(QLabel):
@@ -956,6 +1045,18 @@ class ListPanel(QWidget):
         self.timer.start(app_config.ui_refresh_interval)
         
         self.last_files = []
+        self.first_load = True
+        
+        # Watcher for immediate updates
+        self.watcher = QFileSystemWatcher(self)
+        self.audio_dir = app_config.save_dir
+        if not os.path.exists(self.audio_dir):
+            os.makedirs(self.audio_dir, exist_ok=True)
+        self.watcher.addPath(self.audio_dir)
+        self.watcher.directoryChanged.connect(self.refresh_list)
+        
+        self.waiting_files = {} # path: QTimer
+        
         self.refresh_list()
 
     def keyPressEvent(self, event):
@@ -978,9 +1079,6 @@ class ListPanel(QWidget):
 
         try:
             # Filter logic: exclude files with @0.5 or @0.75
-            # Original files: name_date.wav
-            # Variants: name@0.5_date.wav
-            
             all_files = os.listdir(audio_dir)
             files = []
             for f in all_files:
@@ -995,7 +1093,10 @@ class ListPanel(QWidget):
         
         if files == self.last_files:
             return
-            
+
+        # Identify new files for Auto Play
+        new_items = [f for f in files if f not in self.last_files]
+        
         self.last_files = files
         self.clear_list()
         
@@ -1010,7 +1111,84 @@ class ListPanel(QWidget):
                 item.play_requested.connect(self.on_play_requested)
                 item.game_requested.connect(self.game_requested.emit)
                 self.scroll_layout.insertWidget(self.scroll_layout.count()-1, item)
-                
+        
+        # Trigger Auto Play for new items
+        if self.first_load:
+            self.first_load = False
+            return
+
+        if app_config.play_auto_enabled and new_items:
+            # Sort new items by time to play in order? 
+            # Usually only one new file comes in at a time.
+            # If multiple, maybe play the latest?
+            # User says: "when recording completed... auto play new recording".
+            # We should probably play the most recent one.
+            # new_items are from 'files' which is sorted reverse time.
+            # So new_items[0] is the newest.
+            
+            # Check if this is a "valid" recording (not failed/empty)
+            # AudioRecorder handles deletions of empty files.
+            # So if it exists here, it's valid.
+            
+            target = new_items[0]
+            self._handle_auto_play(target)
+
+    def _handle_auto_play(self, file_path):
+        mode = app_config.play_last_mode
+        if mode == 'mode1':
+            self._start_variant_wait(file_path)
+        else:
+            self.player.auto_play(file_path)
+
+    def _start_variant_wait(self, file_path):
+        if file_path in self.waiting_files:
+            return
+            
+        # Check immediately first
+        if self._check_variants_exist(file_path):
+            self.player.auto_play(file_path)
+            return
+
+        timer = QTimer(self)
+        timer.setInterval(500)
+        timer.timeout.connect(lambda: self._check_variants_loop(file_path, timer))
+        self.waiting_files[file_path] = timer
+        timer.start()
+        
+        # Timeout 15s
+        QTimer.singleShot(15000, lambda: self._stop_wait(file_path, force_play=True))
+
+    def _check_variants_exist(self, file_path):
+        dirname = os.path.dirname(file_path)
+        filename = os.path.basename(file_path)
+        parts = filename.rsplit('_', 1)
+        if len(parts) != 2: return True # No variants expected
+        
+        text_part = parts[0]
+        date_part = parts[1]
+        
+        speeds = ['0.5', '0.75']
+        for s in speeds:
+            fname = f"{text_part}@{s}_{date_part}"
+            if not os.path.exists(os.path.join(dirname, fname)):
+                return False
+        return True
+
+    def _check_variants_loop(self, file_path, timer):
+        if self._check_variants_exist(file_path):
+            self._stop_wait(file_path, True)
+
+    def _stop_wait(self, file_path, force_play=False):
+        if file_path in self.waiting_files:
+            timer = self.waiting_files.pop(file_path)
+            try:
+                timer.stop()
+                timer.deleteLater()
+            except: pass
+            
+            if force_play:
+                self.player.auto_play(file_path)
+
     def on_play_requested(self, file_path):
         self.player.play(file_path)
         if self.ball_widget:

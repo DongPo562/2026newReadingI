@@ -40,7 +40,7 @@ class Config:
 
     @property
     def ui_panel_width(self):
-        return self.config.getint('UI', 'panel_width', fallback=280)
+        return self.config.getint('UI', 'panel_width', fallback=290)
 
     @property
     def ui_panel_max_height(self):
@@ -103,6 +103,35 @@ class Config:
             self.config.set('UI', 'last_position', f"{value[0]},{value[1]}")
             self.save()
 
+    # Top Bar Configuration
+    @property
+    def ui_top_bar_spacing(self):
+        return self.config.getint('UI', 'top_bar_spacing', fallback=10)
+
+    @property
+    def ui_mode_btn_width(self):
+        return self.config.getint('UI', 'mode_btn_width', fallback=50)
+
+    @property
+    def ui_mode_btn_height(self):
+        return self.config.getint('UI', 'mode_btn_height', fallback=26)
+
+    @property
+    def ui_loop_lbl_width(self):
+        return self.config.getint('UI', 'loop_lbl_width', fallback=30)
+
+    @property
+    def ui_loop_lbl_height(self):
+        return self.config.getint('UI', 'loop_lbl_height', fallback=26)
+
+    @property
+    def ui_toggle_width(self):
+        return self.config.getint('UI', 'toggle_width', fallback=50)
+
+    @property
+    def ui_toggle_height(self):
+        return self.config.getint('UI', 'toggle_height', fallback=26)
+
     # PlayMode Settings
     @property
     def play_last_mode(self):
@@ -120,6 +149,15 @@ class Config:
     @play_mode2_loop_count.setter
     def play_mode2_loop_count(self, value):
         self.config.set('PlayMode', 'mode2_loop_count', str(value))
+        self.save()
+
+    @property
+    def play_auto_enabled(self):
+        return self.config.getboolean('PlayMode', 'auto_enabled', fallback=False)
+
+    @play_auto_enabled.setter
+    def play_auto_enabled(self, value):
+        self.config.set('PlayMode', 'auto_enabled', str(value))
         self.save()
 
     # SlowAudio Settings
