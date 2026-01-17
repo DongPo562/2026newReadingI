@@ -5,15 +5,38 @@ import math
 import random
 import re
 from datetime import datetime
+import socket
 from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, 
                              QLabel, QPushButton, QScrollArea, QFrame, QMenu, 
                              QGraphicsDropShadowEffect, QSizePolicy, QLayout)
 from PyQt6.QtCore import (Qt, QTimer, QPoint, QRect, QPropertyAnimation, 
-                          QEasingCurve, pyqtSignal, QSize, QEvent, QUrl, QObject, QFileSystemWatcher, pyqtProperty)
+                          QEasingCurve, pyqtSignal, QSize, QEvent, QUrl, QObject, QFileSystemWatcher, pyqtProperty, QThread)
 from PyQt6.QtGui import (QPainter, QColor, QBrush, QPen, QCursor, QLinearGradient, 
                          QPainterPath, QIcon, QAction, QRegion, QFont)
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput, QMediaDevices
 from config_loader import app_config
+
+class CommandServer(QThread):
+    file_saved_signal = pyqtSignal(str)
+
+    def run(self):
+        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            server.bind(('127.0.0.1', 65432))
+            server.listen(5)
+            while True:
+                try:
+                    conn, addr = server.accept()
+                    with conn:
+                        data = conn.recv(1024)
+                        if data:
+                            filepath = data.decode('utf-8')
+                            self.file_saved_signal.emit(filepath)
+                except Exception as e:
+                    print(f"Socket Accept Error: {e}")
+        except Exception as e:
+            print(f"Socket Bind Error: {e}")
 
 class ToggleSwitch(QWidget):
     toggled = pyqtSignal(bool)
@@ -1140,6 +1163,12 @@ class ListPanel(QWidget):
         else:
             self.player.auto_play(file_path)
 
+    def on_auto_play_signal(self, file_path):
+        print(f"Socket received auto-play request: {file_path}")
+        self.refresh_list()
+        if app_config.play_auto_enabled:
+             self._handle_auto_play(file_path)
+
     def _start_variant_wait(self, file_path):
         if file_path in self.waiting_files:
             return
@@ -1245,6 +1274,11 @@ class FloatingBall(QWidget):
         self.anim.setEasingCurve(QEasingCurve.Type.OutQuad)
 
         self.game_window = None
+        
+        # Command Server for IPC
+        self.cmd_server = CommandServer()
+        self.cmd_server.file_saved_signal.connect(self.panel.on_auto_play_signal)
+        self.cmd_server.start()
 
     def open_game_window(self, text):
         if self.game_window:

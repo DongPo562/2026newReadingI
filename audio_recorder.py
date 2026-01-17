@@ -5,6 +5,7 @@ import numpy as np
 import soundcard as sc
 import soundfile as sf
 import re
+import socket
 from datetime import datetime
 from config_loader import app_config
 
@@ -169,70 +170,79 @@ class AudioRecorder(threading.Thread):
         
         if not np.any(mask):
             print("[Recorder] Warning: Audio seems silent after capture.")
-            pass
-        else:
-            indices = np.where(mask)[0]
-            start_idx = indices[0]
-            end_idx = indices[-1]
-            
-            trimmed = full_data[start_idx:end_idx+1]
-            
-            # Normalization / Gain Compensation
-            # Fix for Issue 2: Low volume when recording from speakers
-            max_val = np.max(np.abs(trimmed))
-            if max_val > 0.01: # Avoid amplifying pure silence/noise
-                target_peak = 0.9 # -1 dB roughly
-                gain = target_peak / max_val
-                # Only apply gain if it's significant amplification or reasonable attenuation
-                # To be safe, let's just normalize to target_peak
-                trimmed = trimmed * gain
-                print(f"[Recorder] Normalized audio (Gain: {gain:.2f}x)")
+            return
 
-            # Add padding (0.3s)
-            pad_samples = int(0.3 * self.samplerate)
-            silence_pad = np.zeros((pad_samples, self.channels), dtype=np.float32)
-            
-            final_data = np.concatenate([silence_pad, trimmed, silence_pad], axis=0)
-            
-            # Filename
-            base_name = self.chosen_words[:30]
-            base_name = re.sub(r'[\\/:*?"<>|]', '', base_name)
-            base_name = base_name.strip()
-            
-            date_str = datetime.now().strftime("%Y-%m-%d")
-            filename = f"{base_name}_{date_str}.wav"
-            
-            if not os.path.exists(self.save_dir):
-                os.makedirs(self.save_dir)
-                
-            filepath = os.path.join(self.save_dir, filename)
-            
-            if os.path.exists(filepath):
-                try:
-                    os.remove(filepath)
-                    print(f"[Recorder] Deleted old file: {filepath}")
-                except Exception as e:
-                    print(f"[Recorder] Could not delete old file: {e}")
-            
-            sf.write(filepath, final_data, self.samplerate)
-            print(f"[Recorder] Saved to: {filepath}")
+        indices = np.where(mask)[0]
+        start_idx = indices[0]
+        end_idx = indices[-1]
+        
+        trimmed = full_data[start_idx:end_idx+1]
+        
+        # Normalization / Gain Compensation
+        max_val = np.max(np.abs(trimmed))
+        if max_val > 0.01: # Avoid amplifying pure silence/noise
+            target_peak = 0.9 # -1 dB roughly
+            gain = target_peak / max_val
+            trimmed = trimmed * gain
+            print(f"[Recorder] Normalized audio (Gain: {gain:.2f}x)")
 
-            # Save Text File (Word Game)
+        # Add padding (0.3s)
+        pad_samples = int(0.3 * self.samplerate)
+        silence_pad = np.zeros((pad_samples, self.channels), dtype=np.float32)
+        
+        final_data = np.concatenate([silence_pad, trimmed, silence_pad], axis=0)
+        
+        # Filename
+        base_name = self.chosen_words[:30]
+        base_name = re.sub(r'[\\/:*?"<>|]', '', base_name)
+        base_name = base_name.strip()
+        
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        filename = f"{base_name}_{date_str}.wav"
+        
+        # 1. Save Text File (Word Game) - Prioritize text file generation
+        try:
+            text_folder = app_config.game_text_folder
+            if not os.path.exists(text_folder):
+                os.makedirs(text_folder)
+            
+            text_filename = f"{base_name}_{date_str}.txt"
+            text_filepath = os.path.join(text_folder, text_filename)
+            
+            with open(text_filepath, 'w', encoding='utf-8') as f:
+                f.write(self.chosen_words)
+            print(f"[Recorder] Saved text to: {text_filepath}")
+        except Exception as e:
+            print(f"[Recorder] Error saving text file: {e}")
+
+        # 2. Save Audio File
+        if not os.path.exists(self.save_dir):
+            os.makedirs(self.save_dir)
+            
+        filepath = os.path.join(self.save_dir, filename)
+        
+        if os.path.exists(filepath):
             try:
-                text_folder = app_config.game_text_folder
-                if not os.path.exists(text_folder):
-                    os.makedirs(text_folder)
-                
-                text_filename = f"{base_name}_{date_str}.txt"
-                text_filepath = os.path.join(text_folder, text_filename)
-                
-                with open(text_filepath, 'w', encoding='utf-8') as f:
-                    f.write(self.chosen_words)
-                print(f"[Recorder] Saved text to: {text_filepath}")
+                os.remove(filepath)
+                print(f"[Recorder] Deleted old file: {filepath}")
             except Exception as e:
-                print(f"[Recorder] Error saving text file: {e}")
+                print(f"[Recorder] Could not delete old file: {e}")
+        
+        sf.write(filepath, final_data, self.samplerate)
+        print(f"[Recorder] Saved to: {filepath}")
 
-            # Generate Slow Versions
-            if app_config.slow_generate_versions:
-                from audio_processor import generate_slow_audio
-                threading.Thread(target=generate_slow_audio, args=(filepath, app_config.slow_speeds)).start()
+        # 3. Generate Slow Versions
+        if app_config.slow_generate_versions:
+            from audio_processor import generate_slow_audio
+            threading.Thread(target=generate_slow_audio, args=(filepath, app_config.slow_speeds)).start()
+
+        # 4. Notify UI
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.settimeout(1.0)
+                s.connect(('127.0.0.1', 65432))
+                s.sendall(filepath.encode('utf-8'))
+            print(f"[Recorder] Notified UI: {filepath}")
+        except Exception as e:
+            # print(f"[Recorder] UI Notification failed (UI might be closed): {e}")
+            pass
