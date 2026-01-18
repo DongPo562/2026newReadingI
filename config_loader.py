@@ -71,6 +71,22 @@ class Config:
         return self.config.get('UI', 'play_button_color', fallback='#81D4FA')
 
     @property
+    def ui_play_button_playing_color(self):
+        return self.config.get('UI', 'play_button_playing_color', fallback='#4CAF50')
+
+    @property
+    def ui_play_button_paused_color(self):
+        return self.config.get('UI', 'play_button_paused_color', fallback='#FF9800')
+
+    @property
+    def ui_item_playing_bg(self):
+        return self.config.get('UI', 'item_playing_bg', fallback='rgba(0, 0, 0, 0.1)')
+
+    @property
+    def ui_item_paused_bg(self):
+        return self.config.get('UI', 'item_paused_bg', fallback='rgba(255, 152, 0, 0.1)')
+
+    @property
     def ui_max_filename_chars(self):
         return self.config.getint('UI', 'max_filename_chars', fallback=22)
 

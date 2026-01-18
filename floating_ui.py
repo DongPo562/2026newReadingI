@@ -38,6 +38,38 @@ class CommandServer(QThread):
         except Exception as e:
             print(f"Socket Bind Error: {e}")
 
+class FileScanner(QThread):
+    files_scanned = pyqtSignal(list, list) # all_files, new_items
+
+    def __init__(self, directory, last_files):
+        super().__init__()
+        self.directory = directory
+        self.last_files = last_files
+
+    def run(self):
+        try:
+            start_time = time.time()
+            if not os.path.exists(self.directory):
+                self.files_scanned.emit([], [])
+                return
+
+            all_files_raw = os.listdir(self.directory)
+            files = []
+            for f in all_files_raw:
+                if not f.endswith('.wav'): continue
+                if '@' in f: continue
+                files.append(os.path.join(self.directory, f))
+            
+            files.sort(key=os.path.getmtime, reverse=True)
+            
+            new_items = [f for f in files if f not in self.last_files]
+            
+            print(f"[Startup] File scan took: {time.time() - start_time:.4f}s")
+            self.files_scanned.emit(files, new_items)
+        except Exception as e:
+            print(f"Scanner Error: {e}")
+            self.files_scanned.emit(self.last_files, [])
+
 class ToggleSwitch(QWidget):
     toggled = pyqtSignal(bool)
 
@@ -102,7 +134,7 @@ class ToggleSwitch(QWidget):
                       self._thumb_radius, self._thumb_radius)
 
 class AudioPlayer(QObject):
-    state_changed = pyqtSignal(bool) # True if playing, False if stopped
+    state_changed = pyqtSignal(QMediaPlayer.PlaybackState) # True if playing, False if stopped
     
     def __init__(self):
         super().__init__()
@@ -130,6 +162,17 @@ class AudioPlayer(QObject):
         default_device = QMediaDevices.defaultAudioOutput()
         self.audio_output.setDevice(default_device)
         # print(f"Audio Output Switched to: {default_device.description()}")
+
+    def handle_play_request(self, file_path):
+        if self.is_playing(file_path):
+            if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
+                self.player.pause()
+            elif self.player.playbackState() == QMediaPlayer.PlaybackState.PausedState:
+                self.player.play()
+            else:
+                self.play(file_path)
+        else:
+            self.play(file_path)
 
     def play(self, file_path, clear_queue=True):
         # Ensure correct device before playing
@@ -219,10 +262,10 @@ class AudioPlayer(QObject):
         self.player.stop()
         self.current_file = None
         self.playback_queue = []
-        self.state_changed.emit(False) 
+        # State change will be handled by signal
 
     def _on_state_changed(self, state):
-        self.state_changed.emit(state == QMediaPlayer.PlaybackState.PlayingState)
+        self.state_changed.emit(state)
 
     def _on_media_status_changed(self, status):
         if status == QMediaPlayer.MediaStatus.EndOfMedia:
@@ -836,28 +879,41 @@ class AudioListItem(QWidget):
         if self.game_text:
             self.game_requested.emit(self.game_text)
 
-    def update_icon(self, is_playing):
-        btn_color = app_config.ui_play_button_color
+    def update_icon(self, state_str):
         btn_size = app_config.ui_play_button_size
         radius = btn_size // 2
         font_size = max(10, btn_size // 2)
 
-        if is_playing:
+        if state_str == "playing":
             self.play_btn.setText("II") 
+            color = app_config.ui_play_button_playing_color
             self.play_btn.setStyleSheet(f"""
                 QPushButton {{
-                    background-color: #4CAF50;
+                    background-color: {color};
                     border-radius: {radius}px;
                     color: white;
                     font-weight: bold;
                     font-size: {font_size}px;
                 }}
             """)
-        else:
+        elif state_str == "paused":
             self.play_btn.setText("▶")
+            color = app_config.ui_play_button_paused_color
             self.play_btn.setStyleSheet(f"""
                 QPushButton {{
-                    background-color: {btn_color};
+                    background-color: {color};
+                    border-radius: {radius}px;
+                    color: white;
+                    font-size: {font_size}px;
+                    padding-left: 2px;
+                }}
+            """)
+        else:
+            self.play_btn.setText("▶")
+            color = app_config.ui_play_button_color
+            self.play_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {color};
                     border-radius: {radius}px;
                     color: white;
                     font-size: {font_size}px;
@@ -872,22 +928,34 @@ class AudioListItem(QWidget):
         anim = QPropertyAnimation(self.play_btn, b"geometry")
         self.play_requested.emit(self.file_path)
 
-    def update_state(self):
-        # We need to periodically check because is_playing logic depends on current_file
-        # which changes during sequence.
-        # But state_changed only emits on Play/Stop/Pause transition.
-        # When switching file in queue, it might Stop -> Play quickly.
+    def update_state(self, state=None):
+        if state is None or isinstance(state, bool):
+             state = self.player.player.playbackState()
         
         is_playing = self.player.is_playing(self.file_path)
-        self.update_icon(is_playing)
+        
         if is_playing:
-            self.setStyleSheet("""
-                QWidget {
-                    background-color: rgba(0, 0, 0, 0.1);
-                    border-left: 2px solid #4CAF50;
-                }
-            """)
+            if state == QMediaPlayer.PlaybackState.PlayingState:
+                self.update_icon("playing")
+                self.setStyleSheet(f"""
+                    QWidget {{
+                        background-color: {app_config.ui_item_playing_bg};
+                        border-left: 2px solid #4CAF50;
+                    }}
+                """)
+            elif state == QMediaPlayer.PlaybackState.PausedState:
+                self.update_icon("paused")
+                self.setStyleSheet(f"""
+                    QWidget {{
+                        background-color: {app_config.ui_item_paused_bg};
+                        border-left: 2px solid #FF9800;
+                    }}
+                """)
+            else:
+                self.update_icon("stopped")
+                self.setStyleSheet("QWidget { background-color: transparent; border: none; }")
         else:
+            self.update_icon("stopped")
             self.setStyleSheet("QWidget { background-color: transparent; border: none; }")
 
     def enterEvent(self, event):
@@ -1067,6 +1135,7 @@ class ListPanel(QWidget):
         self.timer.timeout.connect(self.refresh_list)
         self.timer.start(app_config.ui_refresh_interval)
         
+        self.scanner_thread = None
         self.last_files = []
         self.first_load = True
         
@@ -1090,36 +1159,18 @@ class ListPanel(QWidget):
             super().keyPressEvent(event)
 
     def refresh_list(self):
-        audio_dir = app_config.save_dir
-        if not os.path.exists(audio_dir):
-            self.clear_list()
-            lbl = QLabel("暂无录音文件")
-            lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            lbl.setStyleSheet(f"color: #AAA; font-size: {app_config.ui_font_size}px;")
-            self.scroll_layout.insertWidget(0, lbl)
-            self.last_files = []
+        if self.scanner_thread and self.scanner_thread.isRunning():
             return
+            
+        audio_dir = app_config.save_dir
+        self.scanner_thread = FileScanner(audio_dir, self.last_files)
+        self.scanner_thread.files_scanned.connect(self.on_files_scanned)
+        self.scanner_thread.start()
 
-        try:
-            # Filter logic: exclude files with @0.5 or @0.75
-            all_files = os.listdir(audio_dir)
-            files = []
-            for f in all_files:
-                if not f.endswith('.wav'): continue
-                if '@' in f: continue # Filter variants
-                files.append(os.path.join(audio_dir, f))
-                
-            files.sort(key=os.path.getmtime, reverse=True)
-        except Exception as e:
-            print(f"Error refreshing list: {e}")
-            return 
-        
+    def on_files_scanned(self, files, new_items):
         if files == self.last_files:
             return
-
-        # Identify new files for Auto Play
-        new_items = [f for f in files if f not in self.last_files]
-        
+            
         self.last_files = files
         self.clear_list()
         
@@ -1219,7 +1270,7 @@ class ListPanel(QWidget):
                 self.player.auto_play(file_path)
 
     def on_play_requested(self, file_path):
-        self.player.play(file_path)
+        self.player.handle_play_request(file_path)
         if self.ball_widget:
             self.ball_widget.raise_()
 
@@ -1247,6 +1298,8 @@ class ListPanel(QWidget):
 class FloatingBall(QWidget):
     def __init__(self):
         super().__init__()
+        start_t = time.time()
+        print("[Startup] FloatingBall initializing...")
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.Tool)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         
@@ -1279,6 +1332,7 @@ class FloatingBall(QWidget):
         self.cmd_server = CommandServer()
         self.cmd_server.file_saved_signal.connect(self.panel.on_auto_play_signal)
         self.cmd_server.start()
+        print(f"[Startup] FloatingBall init done in {time.time() - start_t:.4f}s")
 
     def open_game_window(self, text):
         if self.game_window:
@@ -1370,11 +1424,24 @@ class FloatingBall(QWidget):
         refresh_action = QAction("刷新列表", self)
         refresh_action.triggered.connect(self.panel.refresh_list)
         exit_action = QAction("退出程序", self)
-        exit_action.triggered.connect(QApplication.instance().quit)
+        exit_action.triggered.connect(self.exit_application)
         
         menu.addAction(refresh_action)
         menu.addAction(exit_action)
         menu.exec(event.globalPos())
+
+    def exit_application(self):
+        # Send exit signal to main.py
+        try:
+            client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            client.connect(('127.0.0.1', 65433))
+            client.sendall(b"EXIT")
+            client.close()
+        except Exception as e:
+            print(f"Failed to send exit signal to main app: {e}")
+        
+        # Quit this app
+        QApplication.instance().quit()
 
     def expand_panel(self):
         if self.panel.isVisible():

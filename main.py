@@ -2,10 +2,36 @@ import threading
 import time
 import math
 import sys
+import socket
+import os
 from pynput import mouse
 from clipboard_manager import capture_selection
 from text_processor import process_text
 from audio_recorder import AudioRecorder
+
+class ExitServer(threading.Thread):
+    def __init__(self, app_instance):
+        super().__init__()
+        self.app = app_instance
+        self.daemon = True
+
+    def run(self):
+        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            server.bind(('127.0.0.1', 65433))
+            server.listen(1)
+            # print("[ExitServer] Listening on 65433...")
+            while True:
+                conn, addr = server.accept()
+                with conn:
+                    data = conn.recv(1024)
+                    if data.decode().strip() == "EXIT":
+                        print("[ExitServer] Exit signal received.")
+                        self.app.shutdown()
+                        break
+        except Exception as e:
+            print(f"[ExitServer] Error: {e}")
 
 class MainApp:
     def __init__(self):
@@ -109,9 +135,21 @@ class MainApp:
         self.current_recorder = AudioRecorder(chosen_words)
         self.current_recorder.start()
 
+    def shutdown(self):
+        print("[App] Shutting down...")
+        self.stop_current_tasks()
+        if hasattr(self, 'listener') and self.listener:
+            self.listener.stop()
+        os._exit(0)
+
     def run(self):
-        with mouse.Listener(on_click=self.on_click) as listener:
-            listener.join()
+        # Start Exit Server
+        self.exit_server = ExitServer(self)
+        self.exit_server.start()
+
+        self.listener = mouse.Listener(on_click=self.on_click)
+        self.listener.start()
+        self.listener.join()
 
 if __name__ == "__main__":
     app = MainApp()
