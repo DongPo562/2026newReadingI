@@ -17,7 +17,7 @@ def clean_text(text):
     # [^...] means match any character NOT in this set.
     # We replace those with empty string.
     
-    pattern = r"[^a-zA-Z\s\-’—$,.?]"
+    pattern = r"[^a-zA-Z0-9\s\-’—$,.?]"
     cleaned = re.sub(pattern, "", text)
     # Normalize whitespace (optional but good practice) - prompt doesn't explicitly ask, but "spaces" are allowed.
     # Usually we want to collapse multiple spaces.

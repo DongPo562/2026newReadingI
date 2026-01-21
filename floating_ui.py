@@ -8,7 +8,7 @@ from datetime import datetime
 import socket
 from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, 
                              QLabel, QPushButton, QScrollArea, QFrame, QMenu, 
-                             QGraphicsDropShadowEffect, QSizePolicy, QLayout)
+                             QGraphicsDropShadowEffect, QSizePolicy, QLayout, QComboBox)
 from PyQt6.QtCore import (Qt, QTimer, QPoint, QRect, QPropertyAnimation, 
                           QEasingCurve, pyqtSignal, QSize, QEvent, QUrl, QObject, QFileSystemWatcher, pyqtProperty, QThread)
 from PyQt6.QtGui import (QPainter, QColor, QBrush, QPen, QCursor, QLinearGradient, 
@@ -18,6 +18,7 @@ from config_loader import app_config
 
 class CommandServer(QThread):
     file_saved_signal = pyqtSignal(str)
+    stop_playback_signal = pyqtSignal()
 
     def run(self):
         server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -31,8 +32,11 @@ class CommandServer(QThread):
                     with conn:
                         data = conn.recv(1024)
                         if data:
-                            filepath = data.decode('utf-8')
-                            self.file_saved_signal.emit(filepath)
+                            message = data.decode('utf-8')
+                            if message == "STOP_PLAYBACK":
+                                self.stop_playback_signal.emit()
+                            else:
+                                self.file_saved_signal.emit(message)
                 except Exception as e:
                     print(f"Socket Accept Error: {e}")
         except Exception as e:
@@ -69,6 +73,133 @@ class FileScanner(QThread):
         except Exception as e:
             print(f"Scanner Error: {e}")
             self.files_scanned.emit(self.last_files, [])
+
+class FileCleaner(QThread):
+    def __init__(self, list_panel):
+        super().__init__()
+        self.list_panel = list_panel
+        self.running = True
+
+    def run(self):
+        delay = app_config.cleanup_delay_seconds
+        print(f"[Cleanup] Scheduled in {delay} seconds")
+        
+        # Wait for delay
+        for _ in range(delay):
+            if not self.running: return
+            time.sleep(1)
+            
+        while self.running:
+            # Check idle state
+            # Idle means: Player not playing AND Recorder not recording.
+            # Recorder state is tricky to get directly unless we check process or file locks?
+            # Actually, user said: "no currently playing audio and no ongoing recording".
+            # Playing state: self.list_panel.player.player.playbackState()
+            # Recording state: The UI doesn't know about recording directly unless we check for lock files or similar?
+            # But wait, Recorder is in a separate process? No, it's `audio_recorder.py`.
+            # If `main.py` launches both, they are separate processes?
+            # User instructions say: "The program startup".
+            # Usually `floating_ui.py` is the main UI process. 
+            # `audio_recorder.py` might be running in parallel?
+            # If they are separate processes, we can't easily check recorder state unless IPC.
+            # But wait, `main.py` (which I saw earlier in LS) likely orchestrates them?
+            # Let's assume for now we check Player state. 
+            # For recording, we might check if a file is being written to? Or rely on "no new file signals"?
+            # Actually, `floating_ui.py` receives socket signals from recorder when *saved*.
+            # It doesn't know when recording *starts*.
+            # However, prompt says: "If 60s time... wait for idle... no notification needed".
+            # A simple heuristic: check player state. For recording, maybe check if `audio_recorder` process is active? 
+            # Or just check player state for now as "idle" often implies user interaction.
+            # If recording is happening, files are being written. Deleting old files *should* be safe as long as we don't delete the *current* one.
+            # But the prompt says "wait for idle".
+            
+            # Refined check:
+            # 1. Player stopped?
+            # 2. To be safe, maybe we can assume if player is stopped, we are "idle enough"?
+            # Let's strictly check Player state first.
+            
+            is_playing = self.list_panel.player.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState
+            
+            if not is_playing:
+                self.perform_cleanup()
+                break
+            else:
+                print("[Cleanup] Waiting for idle state...")
+                time.sleep(5) # Retry every 5s
+
+    def perform_cleanup(self):
+        try:
+            audio_dir = app_config.save_dir
+            if not os.path.exists(audio_dir): return
+            
+            # Scan all files
+            files = [f for f in os.listdir(audio_dir) if f.endswith('.wav') and '@' not in f]
+            
+            # Extract dates
+            date_map = {} # date_str -> list of files
+            for f in files:
+                # Format: name_YYYY-MM-DD.wav
+                try:
+                    date_part = f.rsplit('_', 1)[1].replace('.wav', '')
+                    # Validate date format YYYY-MM-DD
+                    datetime.strptime(date_part, "%Y-%m-%d")
+                    
+                    if date_part not in date_map:
+                        date_map[date_part] = []
+                    date_map[date_part].append(f)
+                except:
+                    continue
+            
+            sorted_dates = sorted(date_map.keys(), reverse=True)
+            max_dates = app_config.max_display_dates
+            
+            if len(sorted_dates) > max_dates:
+                # Identify dates to remove (the oldest ones)
+                dates_to_remove = sorted_dates[max_dates:]
+                
+                for date_str in dates_to_remove:
+                    print(f"[Cleanup] Removed files for date {date_str}")
+                    
+                    # Delete main files
+                    for wav_file in date_map[date_str]:
+                        self._delete_file_set(os.path.join(audio_dir, wav_file))
+                        
+        except Exception as e:
+            print(f"[Cleanup] Error: {e}")
+
+    def _delete_file_set(self, file_path):
+        # Helper to delete file + variants + text
+        try:
+            dirname = os.path.dirname(file_path)
+            filename = os.path.basename(file_path)
+            
+            files_to_delete = [file_path]
+            
+            parts = filename.rsplit('_', 1)
+            if len(parts) == 2:
+                text_part = parts[0]
+                date_part = parts[1] # includes .wav
+                
+                # Variants
+                for speed in ['0.5', '0.75']:
+                    variant_name = f"{text_part}@{speed}_{date_part}"
+                    files_to_delete.append(os.path.join(dirname, variant_name))
+                
+                # Text file
+                txt_filename = filename.rsplit('.', 1)[0] + ".txt"
+                project_root = os.path.dirname(dirname)
+                text_dir = os.path.join(project_root, app_config.game_text_folder)
+                files_to_delete.append(os.path.join(text_dir, txt_filename))
+            
+            for fpath in files_to_delete:
+                if os.path.exists(fpath):
+                    try:
+                        os.remove(fpath)
+                    except Exception as e:
+                        print(f"[Cleanup] Warning: Failed to delete {os.path.basename(fpath)}: {e}")
+                        
+        except Exception as e:
+            print(f"[Cleanup] Error processing file set {file_path}: {e}")
 
 class ToggleSwitch(QWidget):
     toggled = pyqtSignal(bool)
@@ -653,6 +784,29 @@ class WordGameWindow(QWidget):
         anim.finished.connect(feedback.deleteLater)
         anim.start()
 
+class DateFilterComboBox(QComboBox):
+    def __init__(self, list_panel, parent=None):
+        super().__init__(parent)
+        self.list_panel = list_panel
+
+    def showPopup(self):
+        if hasattr(self.list_panel, 'is_date_menu_open'):
+            self.list_panel.is_date_menu_open = True
+        super().showPopup()
+
+    def hidePopup(self):
+        super().hidePopup()
+        if hasattr(self.list_panel, 'is_date_menu_open'):
+            self.list_panel.is_date_menu_open = False
+            # Check if mouse is outside panel after a brief delay
+            QTimer.singleShot(100, self._check_collapse)
+    
+    def _check_collapse(self):
+        cursor_pos = QCursor.pos()
+        if not self.list_panel.geometry().contains(cursor_pos) and \
+           not self.list_panel.ball_widget.geometry().contains(cursor_pos):
+             self.list_panel.ball_widget.collapse_panel()
+
 class ModeSelector(QWidget):
     interaction = pyqtSignal()
 
@@ -1065,6 +1219,7 @@ class ListPanel(QWidget):
         self.player = player
         self.ball_widget = ball_widget 
         self.is_menu_open = False # Added flag
+        self.is_date_menu_open = False # Date menu flag
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool | Qt.WindowType.WindowStaysOnTopHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         
@@ -1089,6 +1244,52 @@ class ListPanel(QWidget):
         if self.ball_widget:
             self.mode_selector.interaction.connect(self.ball_widget.raise_)
         self.container_layout.addWidget(self.mode_selector)
+        
+        # Date Filter Row
+        self.date_row = QWidget()
+        self.date_row.setFixedHeight(app_config.date_row_height)
+        self.date_layout = QHBoxLayout(self.date_row)
+        self.date_layout.setContentsMargins(app_config.dropdown_margin_left, app_config.dropdown_margin_top, 0, 0)
+        self.date_layout.setSpacing(0)
+        
+        self.date_combo = DateFilterComboBox(self)
+        self.date_combo.setFixedWidth(app_config.dropdown_width)
+        self.date_combo.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.date_combo.currentTextChanged.connect(self.on_date_changed)
+        
+        # Style for dropdown to match theme
+        self.date_combo.setStyleSheet(f"""
+            QComboBox {{
+                background-color: rgba(255, 255, 255, 0.1);
+                color: {app_config.ui_text_color};
+                border: none;
+                border-radius: 4px;
+                padding: 2px 5px;
+                font-size: 13px;
+            }}
+            QComboBox::drop-down {{
+                border: none;
+                width: 20px;
+            }}
+            QComboBox::down-arrow {{
+                image: none;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 5px solid {app_config.ui_text_color};
+                margin-right: 5px;
+            }}
+            QComboBox QAbstractItemView {{
+                background-color: {app_config.menu_bg_color};
+                color: {app_config.menu_text_color};
+                selection-background-color: {app_config.menu_hover_bg_color};
+                border: 1px solid {app_config.menu_border_color};
+            }}
+        """)
+        
+        self.date_layout.addWidget(self.date_combo)
+        self.date_layout.addStretch()
+        
+        self.container_layout.addWidget(self.date_row)
         
         # Divider
         line = QFrame()
@@ -1149,6 +1350,10 @@ class ListPanel(QWidget):
         
         self.waiting_files = {} # path: QTimer
         
+        # Cleanup Thread
+        self.cleanup_thread = FileCleaner(self)
+        self.cleanup_thread.start()
+        
         self.refresh_list()
 
     def keyPressEvent(self, event):
@@ -1158,29 +1363,149 @@ class ListPanel(QWidget):
         else:
             super().keyPressEvent(event)
 
-    def refresh_list(self):
+    def on_date_changed(self, text):
+        print(f"[DateFilter] Selected: {text}")
+        self.refresh_list(force_ui_update=True)
+
+    def refresh_list(self, force_ui_update=False):
         if self.scanner_thread and self.scanner_thread.isRunning():
             return
             
         audio_dir = app_config.save_dir
+        # Pass force_ui_update via sender logic or just store it? 
+        # Easier to store last files locally and re-filter if needed.
+        # But scanner thread is async.
+        
+        # If just filtering changed, we don't need to re-scan files if we have them cached?
+        # FileScanner returns all files.
+        # We can cache 'all_files' in self.cached_all_files
+        
+        if force_ui_update and hasattr(self, 'cached_all_files'):
+             self.update_file_list_ui(self.cached_all_files, [])
+             return
+
         self.scanner_thread = FileScanner(audio_dir, self.last_files)
         self.scanner_thread.files_scanned.connect(self.on_files_scanned)
         self.scanner_thread.start()
 
     def on_files_scanned(self, files, new_items):
-        if files == self.last_files:
-            return
+        self.cached_all_files = files # Cache for filtering
+        
+        if files == self.last_files and not self.first_load:
+             # Even if files match, we might need to update if date changed (handled by force_ui_update above)
+             # But here this is from scanner.
+             return
             
         self.last_files = files
+        self.update_file_list_ui(files, new_items)
+
+    def update_file_list_ui(self, files, new_items):
+        # 1. Extract dates and update dropdown
+        date_set = set()
+        file_date_map = {} # date_str -> [files]
+        
+        for f in files:
+            try:
+                # Format: name_YYYY-MM-DD.wav
+                date_part = f.rsplit('_', 1)[1].replace('.wav', '')
+                datetime.strptime(date_part, "%Y-%m-%d") # Validate
+                date_set.add(date_part)
+                
+                if date_part not in file_date_map:
+                    file_date_map[date_part] = []
+                file_date_map[date_part].append(f)
+            except:
+                continue
+        
+        sorted_dates = sorted(list(date_set), reverse=True)
+        
+        # Limit to max dates (logic says cleanup handles deletion, here we just show what exists)
+        # But UI requirement: "max 15". If cleanup hasn't run yet?
+        # Just show what we have.
+        
+        # Format dates for dropdown
+        display_dates = []
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        
+        current_selection = self.date_combo.currentText()
+        
+        combo_items = []
+        if today_str in sorted_dates:
+             combo_items.append("Today")
+        
+        for d in sorted_dates:
+            if d == today_str: continue
+            # Format YYYY-MM-DD -> DD/MM/YY
+            try:
+                dt = datetime.strptime(d, "%Y-%m-%d")
+                formatted = dt.strftime("%d/%m/%y")
+                combo_items.append(formatted)
+            except:
+                pass
+        
+        # If "Today" is not in list (no files today), but we must show it?
+        # Requirement: "If no recording today... list empty... hint text".
+        # "First startup default Today".
+        # So "Today" should always be an option? 
+        # "Dates filtering rule: only show dates with files".
+        # BUT "First startup default Today. If no file, empty."
+        # Contradiction? 
+        # Interpretation: "Today" is always present or at least initially.
+        # "Only show dates with files" -> implies if Today has no files, don't show it?
+        # But "First startup default Today" implies it must be there.
+        # Let's add Today if it's missing, but handle empty list.
+        
+        if "Today" not in combo_items:
+            # If today has no files, do we show it?
+            # "If today has no recording, list area empty".
+            # So Today MUST be in the dropdown even if empty.
+            combo_items.insert(0, "Today")
+            
+        # Update ComboBox if changed
+        # Block signals to prevent recursion
+        self.date_combo.blockSignals(True)
+        existing_items = [self.date_combo.itemText(i) for i in range(self.date_combo.count())]
+        
+        # Check if we need to update items
+        if combo_items != existing_items:
+            self.date_combo.clear()
+            self.date_combo.addItems(combo_items)
+            
+            # Restore selection if possible
+            if current_selection in combo_items:
+                self.date_combo.setCurrentText(current_selection)
+            else:
+                self.date_combo.setCurrentIndex(0) # Default to first (Today)
+        
+        self.date_combo.blockSignals(False)
+        
+        # 2. Filter files based on selection
+        selected_text = self.date_combo.currentText()
+        target_date_str = ""
+        
+        if selected_text == "Today":
+            target_date_str = today_str
+        else:
+            # Convert DD/MM/YY -> YYYY-MM-DD
+            try:
+                dt = datetime.strptime(selected_text, "%d/%m/%y")
+                target_date_str = dt.strftime("%Y-%m-%d")
+            except:
+                pass
+        
+        filtered_files = file_date_map.get(target_date_str, [])
+        
+        # Update List UI
         self.clear_list()
         
-        if not files:
-            lbl = QLabel("暂无录音文件")
+        if not filtered_files:
+            lbl = QLabel(app_config.empty_list_hint_text)
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            lbl.setStyleSheet(f"color: #AAA; font-size: {app_config.ui_font_size}px;")
-            self.scroll_layout.insertWidget(0, lbl)
+            lbl.setStyleSheet(f"color: {app_config.empty_list_hint_color}; font-size: {app_config.ui_font_size}px;")
+            self.scroll_layout.insertStretch(0)
+            self.scroll_layout.insertWidget(1, lbl)
         else:
-            for f in files:
+            for f in filtered_files:
                 item = AudioListItem(f, self.player, self)
                 item.play_requested.connect(self.on_play_requested)
                 item.game_requested.connect(self.game_requested.emit)
@@ -1192,19 +1517,24 @@ class ListPanel(QWidget):
             return
 
         if app_config.play_auto_enabled and new_items:
-            # Sort new items by time to play in order? 
-            # Usually only one new file comes in at a time.
-            # If multiple, maybe play the latest?
-            # User says: "when recording completed... auto play new recording".
-            # We should probably play the most recent one.
-            # new_items are from 'files' which is sorted reverse time.
-            # So new_items[0] is the newest.
-            
-            # Check if this is a "valid" recording (not failed/empty)
-            # AudioRecorder handles deletions of empty files.
-            # So if it exists here, it's valid.
+            # Check if new item matches current filter?
+            # If we are viewing "Today" and new item is Today, yes.
+            # If we are viewing old date, and new item comes in (Today), do we switch?
+            # Usually AutoPlay implies we want to hear it.
+            # Maybe switch to Today automatically?
+            # Prompt doesn't specify. Standard behavior: stay or switch?
+            # Let's switch to Today if auto play happens.
             
             target = new_items[0]
+            
+            # Extract date of new item
+            try:
+                d_part = target.rsplit('_', 1)[1].replace('.wav', '')
+                if d_part == today_str and self.date_combo.currentText() != "Today":
+                     self.date_combo.setCurrentText("Today")
+            except:
+                pass
+                
             self._handle_auto_play(target)
 
     def _handle_auto_play(self, file_path):
@@ -1286,6 +1616,10 @@ class ListPanel(QWidget):
             super().leaveEvent(event)
             return
 
+        if self.is_date_menu_open:
+            super().leaveEvent(event)
+            return
+
         if not self.ball_widget.geometry().contains(cursor_pos):
              self.ball_widget.collapse_panel()
         super().leaveEvent(event)
@@ -1331,6 +1665,7 @@ class FloatingBall(QWidget):
         # Command Server for IPC
         self.cmd_server = CommandServer()
         self.cmd_server.file_saved_signal.connect(self.panel.on_auto_play_signal)
+        self.cmd_server.stop_playback_signal.connect(self.player.stop)
         self.cmd_server.start()
         print(f"[Startup] FloatingBall init done in {time.time() - start_t:.4f}s")
 

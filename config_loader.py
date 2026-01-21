@@ -231,6 +231,40 @@ class Config:
     def menu_font_size(self):
         return self.config.getint('ContextMenu', 'font_size', fallback=14)
 
+    # DateFilter Settings
+    @property
+    def date_row_height(self):
+        return self.config.getint('DateFilter', 'date_row_height', fallback=30)
+
+    @property
+    def dropdown_width(self):
+        return self.config.getint('DateFilter', 'dropdown_width', fallback=100)
+
+    @property
+    def dropdown_margin_left(self):
+        return self.config.getint('DateFilter', 'dropdown_margin_left', fallback=10)
+
+    @property
+    def dropdown_margin_top(self):
+        return self.config.getint('DateFilter', 'dropdown_margin_top', fallback=5)
+
+    @property
+    def empty_list_hint_text(self):
+        return self.config.get('DateFilter', 'empty_list_hint_text', fallback='今天没有录音')
+        
+    @property
+    def empty_list_hint_color(self):
+        return self.config.get('DateFilter', 'empty_list_hint_color', fallback='#888888')
+
+    @property
+    def max_display_dates(self):
+        return self.config.getint('DateFilter', 'max_display_dates', fallback=15)
+
+    # Cleanup Settings
+    @property
+    def cleanup_delay_seconds(self):
+        return self.config.getint('Cleanup', 'cleanup_delay_seconds', fallback=60)
+
 # Global instance
 try:
     current_dir = os.path.dirname(os.path.abspath(__file__))

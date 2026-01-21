@@ -130,6 +130,16 @@ class MainApp:
         
         if self.stop_processing_flag: return
 
+        # Stop Playback before recording
+        print("[App] Recording triggered - stopping current playback")
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.settimeout(0.5)
+                s.connect(('127.0.0.1', 65432))
+                s.sendall(b"STOP_PLAYBACK")
+        except Exception as e:
+            print(f"[App] Warning: Could not stop playback (UI might be closed): {e}")
+
         # 3. Audio Recording
         # Create recorder
         self.current_recorder = AudioRecorder(chosen_words)
