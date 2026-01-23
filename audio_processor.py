@@ -22,24 +22,20 @@ def generate_slow_audio(input_path, speeds=[0.5, 0.75]):
 
     try:
         # Parse filename
-        # Format: name_date.wav -> name@speed_date.wav
+        # New Format: {number}.wav -> {number}@{speed}.wav
         dirname = os.path.dirname(input_path)
         filename = os.path.basename(input_path)
+        name_without_ext = os.path.splitext(filename)[0]
+        ext = os.path.splitext(filename)[1]
         
-        # Requirement: [清洗后的文本]_[YYYY-MM-DD].wav
-        parts = filename.rsplit('_', 1)
-        if len(parts) != 2:
-            print(f"[AudioProcessor] Filename format error: {filename}")
-            return
-            
-        text_part = parts[0]
-        date_part = parts[1] # includes .wav
-        
+        generated_files = []
+
         for speed in speeds:
-            new_filename = f"{text_part}@{speed}_{date_part}"
+            new_filename = f"{name_without_ext}@{speed}{ext}"
             output_path = os.path.join(dirname, new_filename)
             
             # 1. Try Rubberband (High Quality)
+            success = False
             try:
                 # rubberband=tempo=X
                 cmd = [
@@ -53,7 +49,7 @@ def generate_slow_audio(input_path, speeds=[0.5, 0.75]):
                 
                 if result.returncode == 0:
                     print(f"[AudioProcessor] Generated (Rubberband): {new_filename}")
-                    continue
+                    success = True
                 else:
                     # If failed (e.g. filter not available), log and fall through
                     # print(f"[AudioProcessor] Rubberband filter failed: {result.stderr.strip()}")
@@ -63,22 +59,30 @@ def generate_slow_audio(input_path, speeds=[0.5, 0.75]):
                 print(f"[AudioProcessor] Error trying rubberband: {e}")
 
             # 2. Fallback to Atempo (Standard Quality)
-            try:
-                # atempo supports 0.5 to 2.0
-                cmd = [
-                    ffmpeg_cmd, '-y', '-v', 'error',
-                    '-i', input_path,
-                    '-af', f'atempo={speed}',
-                    output_path
-                ]
-                subprocess.run(cmd, check=True, capture_output=True)
-                print(f"[AudioProcessor] Generated (Atempo): {new_filename}")
+            if not success:
+                try:
+                    # atempo supports 0.5 to 2.0
+                    cmd = [
+                        ffmpeg_cmd, '-y', '-v', 'error',
+                        '-i', input_path,
+                        '-af', f'atempo={speed}',
+                        output_path
+                    ]
+                    subprocess.run(cmd, check=True, capture_output=True)
+                    print(f"[AudioProcessor] Generated (Atempo): {new_filename}")
+                    success = True
+                    
+                except Exception as e:
+                    print(f"[AudioProcessor] Failed to generate {speed}x version: {e}")
+            
+            if success:
+                generated_files.append(output_path)
                 
-            except Exception as e:
-                print(f"[AudioProcessor] Failed to generate {speed}x version: {e}")
+        return generated_files
                 
     except Exception as e:
         print(f"[AudioProcessor] Error processing {input_path}: {e}")
+        return []
 
 if __name__ == "__main__":
     # Test

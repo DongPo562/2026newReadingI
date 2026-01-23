@@ -142,7 +142,7 @@ class MainApp:
 
         # 3. Audio Recording
         # Create recorder
-        self.current_recorder = AudioRecorder(chosen_words)
+        self.current_recorder = AudioRecorder(new_content)
         self.current_recorder.start()
 
     def shutdown(self):

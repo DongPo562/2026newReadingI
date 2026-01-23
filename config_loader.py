@@ -195,10 +195,6 @@ class Config:
         return self.config.getint('WordGame', 'min_text_length', fallback=30)
 
     @property
-    def game_text_folder(self):
-        return self.config.get('WordGame', 'text_folder', fallback='text')
-
-    @property
     def game_clickable_text_color(self):
         return self.config.get('WordGame', 'clickable_text_color', fallback='#FFEB3B')
 
@@ -264,6 +260,23 @@ class Config:
     @property
     def cleanup_delay_seconds(self):
         return self.config.getint('Cleanup', 'cleanup_delay_seconds', fallback=60)
+
+    # Database Settings
+    @property
+    def db_path(self):
+        return self.config.get('Database', 'db_path', fallback='data.db')
+
+    @property
+    def db_wal_mode(self):
+        return self.config.getboolean('Database', 'wal_mode', fallback=True)
+
+    @property
+    def db_busy_timeout(self):
+        return self.config.getint('Database', 'busy_timeout', fallback=30000)
+
+    @property
+    def db_retry_count(self):
+        return self.config.getint('Database', 'retry_count', fallback=3)
 
 # Global instance
 try:

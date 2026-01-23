@@ -8,11 +8,13 @@ import re
 import socket
 from datetime import datetime
 from config_loader import app_config
+from db_manager import DatabaseManager
+from audio_processor import generate_slow_audio
 
 class AudioRecorder(threading.Thread):
-    def __init__(self, chosen_words):
+    def __init__(self, content):
         super().__init__()
-        self.chosen_words = chosen_words
+        self.content = content
         self.running = True
         self.audio_data = []
         self.samplerate = 48000 # Default for WASAPI shared mode
@@ -30,6 +32,8 @@ class AudioRecorder(threading.Thread):
         self.silence_threshold_db = app_config.silence_threshold_db
         self.end_silence_duration = app_config.end_silence_duration
         self.save_dir = app_config.save_dir
+        
+        self.db_manager = DatabaseManager()
 
     def get_loopback_mic(self):
         """
@@ -39,39 +43,13 @@ class AudioRecorder(threading.Thread):
             default_speaker = sc.default_speaker()
             print(f"[Recorder] Default Speaker: {default_speaker.name}")
             
-            # 1. Get all 'microphones' including loopback
             all_mics = sc.all_microphones(include_loopback=True)
-            
-            # 2. Get physical microphones (to exclude them)
-            # Note: soundcard doesn't make this easy, but usually physical mics 
-            # don't share the EXACT name with the Speaker unless it's a headset.
-            # But headset HFP mic vs Stereo loopback is the issue.
-            
-            # Strategy: Look for a device in all_mics that matches the speaker name exactly.
-            # If there are duplicates (e.g. Headset case), we need to distinguish.
-            # Usually the Loopback device comes *first* or *last*? No guarantee.
-            # However, physical mics usually have distinct IDs.
-            
-            # Better Strategy: 
-            # Iterate and find the one that is NOT a physical mic? 
-            # How? `sc.all_microphones(include_loopback=False)` gives physical ones.
-            
             physical_mics_ids = [m.id for m in sc.all_microphones(include_loopback=False)]
-            
             loopback_candidates = [m for m in all_mics if m.id not in physical_mics_ids]
             
-            # Now find the one matching the speaker
             for mic in loopback_candidates:
                 if mic.name == default_speaker.name:
                     return mic
-            
-            # Fallback: if no exact name match (rare), try fuzzy?
-            # Or just take the first loopback? No, that might be a different device.
-            # Try finding one with "Loopback" in name? (Not standard on Windows)
-            
-            # If we are here, maybe the name doesn't match exactly.
-            # Try `sc.get_microphone(id=str(default_speaker.name), include_loopback=True)`
-            # but verifying it's in loopback_candidates.
             
             fallback = sc.get_microphone(id=str(default_speaker.name), include_loopback=True)
             if fallback.id in [m.id for m in loopback_candidates]:
@@ -97,15 +75,12 @@ class AudioRecorder(threading.Thread):
 
             print(f"[Recorder] Recording from Loopback: {mic.name}")
 
-            # Use native samplerate if possible, or 48000.
-            # We use 48000 as it's standard for Windows WASAPI shared mode.
             with mic.recorder(samplerate=self.samplerate) as recorder:
                 self.start_time = time.time()
                 
                 while self.running:
                     # Read chunk
                     data = recorder.record(numframes=self.blocksize)
-                    # data is (numframes, channels) float32
                     
                     # Calculate dB
                     rms = np.sqrt(np.mean(data**2))
@@ -180,8 +155,8 @@ class AudioRecorder(threading.Thread):
         
         # Normalization / Gain Compensation
         max_val = np.max(np.abs(trimmed))
-        if max_val > 0.01: # Avoid amplifying pure silence/noise
-            target_peak = 0.9 # -1 dB roughly
+        if max_val > 0.01:
+            target_peak = 0.9
             gain = target_peak / max_val
             trimmed = trimmed * gain
             print(f"[Recorder] Normalized audio (Gain: {gain:.2f}x)")
@@ -192,57 +167,105 @@ class AudioRecorder(threading.Thread):
         
         final_data = np.concatenate([silence_pad, trimmed, silence_pad], axis=0)
         
-        # Filename
-        base_name = self.chosen_words[:30]
-        base_name = re.sub(r'[\\/:*?"<>|]', '', base_name)
-        base_name = base_name.strip()
-        
-        date_str = datetime.now().strftime("%Y-%m-%d")
-        filename = f"{base_name}_{date_str}.wav"
-        
-        # 1. Save Text File (Word Game) - Prioritize text file generation
+        # Save Transaction
         try:
-            text_folder = app_config.game_text_folder
-            if not os.path.exists(text_folder):
-                os.makedirs(text_folder)
-            
-            text_filename = f"{base_name}_{date_str}.txt"
-            text_filepath = os.path.join(text_folder, text_filename)
-            
-            with open(text_filepath, 'w', encoding='utf-8') as f:
-                f.write(self.chosen_words)
-            print(f"[Recorder] Saved text to: {text_filepath}")
+            self._save_transaction_with_retry(final_data)
         except Exception as e:
-            print(f"[Recorder] Error saving text file: {e}")
+            print(f"[Recorder] Final save failed: {e}")
 
-        # 2. Save Audio File
-        if not os.path.exists(self.save_dir):
-            os.makedirs(self.save_dir)
-            
-        filepath = os.path.join(self.save_dir, filename)
+    def _save_transaction_with_retry(self, final_data):
+        # We handle retry manually here because we want to retry the whole transaction
+        # including file operations if DB locks (though files shouldn't lock, DB might).
+        # Actually, standard DB retry logic usually applies to the DB commit/execute.
+        # But here we have a mixed transaction (DB + File).
         
-        if os.path.exists(filepath):
+        # If DB is locked, we can retry.
+        # If File fails, we shouldn't retry (likely permission or disk issue).
+        
+        # For simplicity and robustness, we can just try once, or retry only on DB specific errors.
+        # But since we want "Atomic", let's try to follow the structure.
+        
+        for attempt in range(app_config.db_retry_count):
             try:
-                os.remove(filepath)
-                print(f"[Recorder] Deleted old file: {filepath}")
+                self._execute_save_transaction(final_data)
+                return
             except Exception as e:
-                print(f"[Recorder] Could not delete old file: {e}")
+                # If it's a DB locking error, we might want to retry
+                # But if files were created, they are deleted in rollback.
+                # So it's safe to retry from scratch.
+                if "locked" in str(e).lower() and attempt < app_config.db_retry_count - 1:
+                     print(f"[Recorder] Transaction locked, retrying ({attempt+1})...")
+                     time.sleep(0.5)
+                     continue
+                raise e
+
+    def _execute_save_transaction(self, final_data):
+        conn = self.db_manager.get_connection()
+        generated_files = []
         
-        sf.write(filepath, final_data, self.samplerate)
-        print(f"[Recorder] Saved to: {filepath}")
+        try:
+            cursor = conn.cursor()
+            
+            # 1. Start Transaction (Implicit or explicit)
+            # We use implicit transaction by executing INSERT
+            
+            # 2. Insert DB
+            date_str = datetime.now().strftime("%Y-%m-%d")
+            cursor.execute(
+                "INSERT INTO recordings (content, date) VALUES (?, ?)",
+                (self.content, date_str)
+            )
+            number = cursor.lastrowid
+            
+            # 3. Save 1x File
+            if not os.path.exists(self.save_dir):
+                os.makedirs(self.save_dir)
+                
+            filename_1x = f"{number}.wav"
+            filepath_1x = os.path.join(self.save_dir, filename_1x)
+            
+            # Save using soundfile
+            sf.write(filepath_1x, final_data, self.samplerate)
+            generated_files.append(filepath_1x)
+            
+            # 4. Save Slow Versions
+            if app_config.slow_generate_versions:
+                # generate_slow_audio returns list of created files
+                slow_files = generate_slow_audio(filepath_1x, app_config.slow_speeds)
+                generated_files.extend(slow_files)
+            
+            # 5. Commit
+            conn.commit()
+            print(f"[Recorder] Successfully saved recording #{number}")
+            
+            # 6. Notify UI
+            self.notify_ui()
+            
+        except Exception as e:
+            # Rollback DB
+            conn.rollback()
+            print(f"Recording save failed: {e}, transaction rolled back")
+            
+            # Delete files
+            for f in generated_files:
+                try:
+                    if os.path.exists(f):
+                        os.remove(f)
+                        print(f"Rollback cleanup: deleted {f}")
+                except Exception as cleanup_error:
+                     print(f"Rollback cleanup warning: failed to delete {f}, reason: {cleanup_error}")
+            raise e
 
-        # 3. Generate Slow Versions
-        if app_config.slow_generate_versions:
-            from audio_processor import generate_slow_audio
-            threading.Thread(target=generate_slow_audio, args=(filepath, app_config.slow_speeds)).start()
-
-        # 4. Notify UI
+    def notify_ui(self):
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.settimeout(1.0)
                 s.connect(('127.0.0.1', 65432))
-                s.sendall(filepath.encode('utf-8'))
-            print(f"[Recorder] Notified UI: {filepath}")
+                # Send a signal. The content doesn't matter much as UI reloads from DB.
+                # But previously it sent filepath. Now just "UPDATE" or empty?
+                # Requirement: "Socket message only as trigger signal"
+                s.sendall(b"UPDATE")
+            print(f"[Recorder] Notified UI")
         except Exception as e:
-            # print(f"[Recorder] UI Notification failed (UI might be closed): {e}")
+            # print(f"[Recorder] UI Notification failed: {e}")
             pass
