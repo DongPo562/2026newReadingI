@@ -9,7 +9,7 @@ import socket
 import shutil
 from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, 
                              QLabel, QPushButton, QScrollArea, QFrame, QMenu, 
-                             QGraphicsDropShadowEffect, QSizePolicy, QLayout, QComboBox)
+                             QGraphicsDropShadowEffect, QSizePolicy, QLayout, QComboBox, QStyleOption, QStyle)
 from PyQt6.QtCore import (Qt, QTimer, QPoint, QRect, QPropertyAnimation, 
                           QEasingCurve, pyqtSignal, QSize, QEvent, QUrl, QObject, QFileSystemWatcher, pyqtProperty, QThread)
 from PyQt6.QtGui import (QPainter, QColor, QBrush, QPen, QCursor, QLinearGradient, 
@@ -17,6 +17,7 @@ from PyQt6.QtGui import (QPainter, QColor, QBrush, QPen, QCursor, QLinearGradien
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput, QMediaDevices
 from config_loader import app_config
 from db_manager import DatabaseManager
+from style_manager import StyleManager
 
 class CommandServer(QThread):
     file_saved_signal = pyqtSignal(str)
@@ -1053,6 +1054,265 @@ class AudioListItem(QWidget):
         except Exception as e:
             print(f"[Delete] Error: {e}")
 
+class ReviewToggleSwitch(ToggleSwitch):
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        colors = app_config.review_toggle_colors
+        # Requirement: Configurable colors
+        track_color = QColor(colors['on']) if self._checked else QColor(colors['off'])
+        
+        p.setBrush(track_color)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.drawRoundedRect(0, 0, self.width(), self.height(), self.height() / 2, self.height() / 2)
+
+        p.setBrush(QColor(colors['knob']))
+        p.drawEllipse(QPoint(int(self._thumb_pos + self._thumb_radius), int(self.height() / 2)), 
+                      self._thumb_radius, self._thumb_radius)
+
+class ReviewWindow(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.Tool)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        
+        # 加载并应用 QSS 样式
+        stylesheet = StyleManager.load_stylesheet('review_window.qss')
+        self.setStyleSheet(stylesheet)
+        
+        # 设置窗口尺寸（从配置读取）
+        self.resize(app_config.review_window_width, app_config.review_window_height)
+        
+        # Load Position
+        pos = app_config.review_last_position
+        if pos:
+            self.move(pos[0], pos[1])
+        else:
+            # Center on screen
+            screen = QApplication.primaryScreen().geometry()
+            self.move(screen.center() - self.rect().center())
+
+        self.dragging = False
+        self.drag_position = QPoint()
+
+        # Mock Data
+        self.words = [
+            {'word': 'beautiful', 'number': 1, 'box_level': 1},
+            {'word': 'language', 'number': 2, 'box_level': 2},
+            {'word': 'remember', 'number': 3, 'box_level': 1},
+            {'word': 'important', 'number': 4, 'box_level': 3},
+            {'word': 'vocabulary', 'number': 5, 'box_level': 1}
+        ]
+        self.current_index = 0
+        self.loop_count = 1
+
+        self.init_ui()
+        self.update_content()
+
+    def init_ui(self):
+        # 获取布局参数
+        self.cfg = app_config
+        padding = self.cfg.review_padding
+        row_heights = [
+            self.cfg.review_row1_height,
+            self.cfg.review_row2_height,
+            self.cfg.review_row3_height,
+            self.cfg.review_row4_height
+        ]
+        spacing = self.cfg.review_element_spacing
+
+        # Main Layout (on self)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0) # QSS will handle padding via frame or window
+        main_layout.setSpacing(0)
+
+        # Row 1: Header (Auto, Toggle, Loop ... Stats ... Close)
+        row1 = QHBoxLayout()
+        row1.setSpacing(0)
+        row1.setContentsMargins(0, 0, 0, 0)
+        
+        lbl_auto = QLabel("Auto")
+        lbl_auto.setObjectName("autoLabel")
+        
+        toggle_w, toggle_h = self.cfg.review_toggle_size
+        self.toggle_auto = ReviewToggleSwitch(width=toggle_w, height=toggle_h)
+        self.toggle_auto.setObjectName("toggleSwitch")
+        
+        self.btn_loop = QPushButton("x1")
+        self.btn_loop.setObjectName("loopCountBtn")
+        self.btn_loop.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_loop.clicked.connect(self.toggle_loop)
+        
+        self.lbl_stats = QLabel("待复习: 0  今日完成: 0")
+        self.lbl_stats.setObjectName("statsLabel")
+        self.lbl_stats.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self.btn_close = QPushButton("×") 
+        self.btn_close.setObjectName("closeBtn")
+        self.btn_close.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_close.clicked.connect(self.close)
+
+        # Left group: Auto + Toggle + Loop
+        row1.addWidget(lbl_auto)
+        row1.addWidget(self.toggle_auto)
+        row1.addWidget(self.btn_loop)
+        
+        row1.addStretch()
+        row1.addWidget(self.lbl_stats)
+        row1.addStretch()
+        
+        row1.addWidget(self.btn_close)
+        
+        self.container1 = QWidget()
+        self.container1.setObjectName("headerContainer")
+        self.container1.setLayout(row1)
+        main_layout.addWidget(self.container1)
+
+        # Row 2: Word Area (Play + Word)
+        row2 = QHBoxLayout()
+        row2.setSpacing(0)
+        row2.setContentsMargins(0, 0, 0, 0)
+        
+        self.btn_play = QPushButton("▶")
+        self.btn_play.setObjectName("playBtn")
+        # Size is now handled in QSS
+        # self.btn_play.setFixedSize(self.cfg.review_play_btn_diameter, self.cfg.review_play_btn_diameter)
+        self.btn_play.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_play.clicked.connect(self.on_play)
+        
+        self.lbl_word = QLabel("")
+        self.lbl_word.setObjectName("wordLabel")
+        
+        # Font size override
+        font_override = self.cfg.review_word_font_size_override
+        if font_override > 0:
+            self.lbl_word.setStyleSheet(f"font-size: {font_override}px;")
+        
+        row2.addStretch() # Center alignment
+        row2.addWidget(self.btn_play)
+        row2.addWidget(self.lbl_word)
+        row2.addStretch() # Center alignment
+        
+        self.container2 = QWidget()
+        self.container2.setObjectName("wordContainer")
+        self.container2.setLayout(row2)
+        main_layout.addWidget(self.container2)
+
+        # Row 3: Actions (Forget / Remember)
+        row3 = QHBoxLayout()
+        row3.setSpacing(30)
+        row3.setContentsMargins(0, 0, 0, 0)
+        
+        # Sizes are now handled in QSS
+        # btn_w, btn_h = self.cfg.review_action_btn_size
+        
+        self.btn_forget = QPushButton("不记得")
+        self.btn_forget.setObjectName("forgetBtn")
+        # self.btn_forget.setFixedSize(btn_w, btn_h)
+        self.btn_forget.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_forget.clicked.connect(self.on_forget)
+        
+        self.btn_remember = QPushButton("记得")
+        self.btn_remember.setObjectName("rememberBtn")
+        # self.btn_remember.setFixedSize(btn_w, btn_h)
+        self.btn_remember.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_remember.clicked.connect(self.on_remember)
+        
+        row3.addStretch()
+        row3.addWidget(self.btn_forget)
+        row3.addWidget(self.btn_remember)
+        row3.addStretch()
+        
+        self.container3 = QWidget()
+        self.container3.setObjectName("actionContainer")
+        self.container3.setLayout(row3)
+        main_layout.addWidget(self.container3)
+        
+        # Complete Label
+        self.lbl_complete = QLabel("完成！")
+        self.lbl_complete.setObjectName("completeLabel")
+        self.lbl_complete.hide()
+
+    def paintEvent(self, event):
+        """Enable styling for custom widget"""
+        opt = QStyleOption()
+        opt.initFrom(self)
+        p = QPainter(self)
+        self.style().drawPrimitive(QStyle.PrimitiveElement.PE_Widget, opt, p, self)
+
+    def keyPressEvent(self, event):
+        """按键事件处理"""
+        from PyQt6.QtCore import Qt
+        
+        # F5 热重载样式
+        if event.key() == Qt.Key.Key_F5:
+            self._reload_stylesheet()
+            print("[ReviewWindow] 样式已重新加载")
+        
+        super().keyPressEvent(event)
+
+    def _reload_stylesheet(self):
+        """重新加载样式表"""
+        stylesheet = StyleManager.reload_stylesheet('review_window.qss')
+        self.setStyleSheet(stylesheet)
+
+
+    def toggle_loop(self):
+        modes = [1, 2, 3]
+        idx = modes.index(self.loop_count)
+        self.loop_count = modes[(idx + 1) % len(modes)]
+        self.btn_loop.setText(f"x{self.loop_count}")
+
+    def update_content(self):
+        if self.current_index < len(self.words):
+            word_data = self.words[self.current_index]
+            self.lbl_word.setText(word_data['word'])
+            self.lbl_stats.setText(f"待复习: {len(self.words) - self.current_index}  今日完成: {self.current_index}")
+        else:
+            self.lbl_word.setText("太棒了！没有需要复习的单词")
+            self.lbl_stats.setText(f"待复习: 0  今日完成: {len(self.words)}")
+            self.btn_play.setEnabled(False)
+            self.btn_remember.setEnabled(False)
+            self.btn_forget.setEnabled(False)
+
+    def on_remember(self):
+        if self.current_index < len(self.words):
+            word = self.words[self.current_index]['word']
+            print(f"用户点击了记得按钮，当前单词：{word}")
+            self.current_index += 1
+            self.update_content()
+
+    def on_forget(self):
+        if self.current_index < len(self.words):
+            word = self.words[self.current_index]['word']
+            print(f"用户点击了不记得按钮，当前单词：{word}")
+            self.current_index += 1
+            self.update_content()
+
+    def on_play(self):
+        if self.current_index < len(self.words):
+            word = self.words[self.current_index]['word']
+            print(f"用户点击了播放按钮，当前单词：{word}")
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.dragging = True
+            self.drag_position = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            event.accept()
+
+    def mouseMoveEvent(self, event):
+        if self.dragging and event.buttons() & Qt.MouseButton.LeftButton:
+            self.move(event.globalPosition().toPoint() - self.drag_position)
+            event.accept()
+
+    def mouseReleaseEvent(self, event):
+        self.dragging = False
+
+    def closeEvent(self, event):
+        app_config.review_last_position = (self.x(), self.y())
+        super().closeEvent(event)
+
 class ListPanel(QWidget):
     game_requested = pyqtSignal(str)
 
@@ -1126,6 +1386,25 @@ class ListPanel(QWidget):
         """)
         
         self.date_layout.addWidget(self.date_combo)
+
+        # Add Review Button
+        self.btn_review = QPushButton("Review")
+        self.btn_review.setFixedSize(60, 24)
+        self.btn_review.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_review.setStyleSheet("""
+            QPushButton { 
+                background-color: #9B59B6; 
+                color: white; 
+                border-radius: 4px; 
+                border: none; 
+                font-size: 12px;
+                margin-left: 10px;
+            }
+            QPushButton:hover { background-color: #8E44AD; }
+        """)
+        self.btn_review.clicked.connect(self.open_review_window)
+        self.date_layout.addWidget(self.btn_review)
+
         self.date_layout.addStretch()
         
         self.container_layout.addWidget(self.date_row)
@@ -1173,7 +1452,16 @@ class ListPanel(QWidget):
         self.cleanup_thread = FileCleaner(self.db_manager, self)
         self.cleanup_thread.start()
         
+        self.review_window = None
+
         self.refresh_list()
+
+    def open_review_window(self):
+        if not self.review_window:
+            self.review_window = ReviewWindow()
+        self.review_window.show()
+        self.review_window.raise_()
+        self.review_window.activateWindow()
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_Space:

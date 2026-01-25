@@ -7,13 +7,15 @@ d:\Scanner\2026newReadingI\
 ├── audio/                      # [运行时生成] 存放录制的音频文件 (.wav)
 ├── text/                       # [运行时生成] 存放录音对应的文本文件 (.txt)
 ├── tasks/                      # 任务记录文件夹
-│   └── add-pause-and-startup-optimization.md
+│   └── increase-database/
 ├── .gitignore                  # Git 忽略文件配置
 ├── audio_processor.py          # 音频后处理模块 (FFmpeg 变速)
 ├── audio_recorder.py           # 音频录制模块 (WASAPI Loopback)
 ├── clipboard_manager.py        # 剪贴板管理模块 (文本捕获)
 ├── config.ini                  # 配置文件
 ├── config_loader.py            # 配置加载模块
+├── data.db                     # SQLite 数据库文件
+├── db_manager.py               # 数据库管理模块
 ├── floating_ui.py              # 主 UI 界面模块 (PyQt6 悬浮球)
 ├── main.py                     # 后台逻辑主入口 (鼠标监听与流程控制)
 ├── README.md                   # 项目说明文档
@@ -33,6 +35,7 @@ d:\Scanner\2026newReadingI\
 | **clipboard_manager.py** | **剪贴板操作**。封装了模拟 Ctrl+C、读取剪贴板、备份与恢复剪贴板内容的逻辑，确保能够获取用户选中的文本而不污染用户剪贴板历史。 |
 | **text_processor.py** | **文本处理**。负责对捕获的文本进行合法性校验（长度限制、重复检测）和清洗（仅保留英文字符、数字及特定标点）。 |
 | **config_loader.py** | **配置管理**。封装 `configparser`，提供强类型的配置属性访问接口，统一管理 `config.ini` 中的参数。 |
+| **db_manager.py** | **数据库管理**。封装 SQLite 数据库操作，提供录音记录的增删改查功能，支持按日期查询、数据一致性检查和自动清理过期数据。 |
 
 ## 3. 核心类和函数清单
 
@@ -62,8 +65,23 @@ d:\Scanner\2026newReadingI\
 *   **`generate_slow_audio(input_path, speeds)`**: 调用 FFmpeg 生成指定倍速的音频副本。
 
 ### text_processor.py
-*   **`clean_text(text)`**: 正则表达式清洗文本，仅保留 `[a-zA-Z0-9\s\-’—$,.?]`。
+*   **`clean_text(text)`**: 正则表达式清洗文本，仅保留 `[a-zA-Z0-9\s\-—$,.?]`。
 *   **`validate_text(text, last_text)`**: 校验文本长度（<=600）及是否重复。
+
+### db_manager.py
+*   **`class DatabaseManager`**: 数据库管理类。
+    *   `connect()`: 建立数据库连接，配置 WAL 模式和忙等待超时。
+    *   `init_db()`: 初始化数据库表结构（recordings 表）。
+    *   `insert_recording(content, date_str)`: 插入新录音记录，返回自增编号。
+    *   `delete_recording(number)`: 根据编号删除录音记录。
+    *   `get_recordings_by_date(date_str)`: 按日期获取录音列表（按编号降序）。
+    *   `get_all_dates(limit=15)`: 获取最近的日期列表（按日期降序）。
+    *   `get_content(number)`: 获取指定编号的录音内容文本。
+    *   `get_dates_exceeding_limit(limit=15)`: 获取需要清理的过期日期列表。
+    *   `get_recordings_by_date_list(date_list)`: 批量获取多个日期的录音记录。
+    *   `get_all_recordings_for_consistency_check()`: 获取所有录音记录用于一致性检查。
+    *   `get_recording_by_number(number)`: 获取单个录音记录的完整信息。
+    *   `_execute_with_retry(operation_func)`: 带重试机制的数据库操作执行器。
 
 ## 4. config.ini 配置参数说明
 
@@ -109,6 +127,15 @@ d:\Scanner\2026newReadingI\
 *   `max_display_dates`: 列表保留的最大日期数量（用于清理逻辑）。
 *   `cleanup_delay_seconds`: 启动后延迟多久开始执行清理任务。
 
+### [Cleanup] (清理设置)
+*   `cleanup_delay_seconds`: 启动后延迟多久开始执行清理任务。
+
+### [Database] (数据库设置)
+*   `db_path`: SQLite 数据库文件路径。
+*   `wal_mode`: 是否启用 WAL (Write-Ahead Logging) 模式，提高并发性能。
+*   `busy_timeout`: 数据库忙等待超时时间（毫秒）。
+*   `retry_count`: 数据库操作失败时的重试次数。
+
 ## 5. 程序主要工作流程
 
 ```mermaid
@@ -130,6 +157,7 @@ graph TD
     StopRecord --> SaveFiles[保存 .wav 和 .txt]
     SaveFiles -->|异步| FFmpeg[生成慢速音频]
     SaveFiles -->|Socket 通知| UI[floating_ui.py]
+    SaveFiles -->|数据库操作| DB[db_manager.py: 插入记录]
     
     UI -->|收到通知| RefreshList[刷新列表]
     RefreshList -->|若开启自动播放| AutoPlay[自动播放]
@@ -139,6 +167,9 @@ graph TD
     ModeCheck -->|Mode 1| PlaySlow[播放 0.5x -> 0.75x -> 1.0x]
     ModeCheck -->|Mode 2| PlayLoop[循环播放 1.0x N次]
     end
+    
+    UI -->|删除操作| DBDelete[db_manager.py: 删除记录]
+    UI -->|定期清理| DBCleanup[db_manager.py: 清理过期数据]
 ```
 
 ## 6. 依赖库清单 (requirements.txt)
@@ -152,6 +183,8 @@ numpy         # 音频数据处理
 pywin32       # Windows API 调用
 PyQt6         # 图形用户界面
 ```
+
+注：`sqlite3` 为 Python 标准库，无需额外安装。
 
 ## 7. 技术实现细节
 
@@ -176,4 +209,10 @@ PyQt6         # 图形用户界面
 5.  **单词还原游戏算法**:
     *   将句子 Tokenize（分词）为单词列表。
     *   使用随机洗牌算法打乱单词顺序，并确保打乱后的顺序与原句不同（如果可能）。
-    *   用户通过点击单词将其在“待选区”和“已选区”之间移动，最终比对已选区的单词序列与原句是否一致。
+    *   用户通过点击单词将其在"待选区"和"已选区"之间移动，最终比对已选区的单词序列与原句是否一致。
+
+6.  **SQLite 数据库管理**:
+    *   **WAL 模式**: 启用 Write-Ahead Logging 模式，允许读写并发操作，提高多线程环境下的性能。
+    *   **重试机制**: 实现带指数退避的重试逻辑，当数据库被锁定时自动重试，避免因并发访问导致的操作失败。
+    *   **数据一致性**: 通过数据库记录与文件系统的对比检查，确保录音文件与数据库记录的一致性。
+    *   **自动清理**: 根据配置的最大日期数量限制，自动清理过期的录音记录和对应的文件。

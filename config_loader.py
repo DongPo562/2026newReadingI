@@ -278,6 +278,124 @@ class Config:
     def db_retry_count(self):
         return self.config.getint('Database', 'retry_count', fallback=3)
 
+    # ReviewWindow Settings
+    @property
+    def review_window_width(self):
+        return self.config.getint('ReviewWindow', 'window_width', fallback=240)
+
+    @property
+    def review_window_height(self):
+        return self.config.getint('ReviewWindow', 'window_height', fallback=140)
+
+    @property
+    def review_opacity(self):
+        return self.config.getfloat('ReviewWindow', 'opacity', fallback=0.95)
+
+    @property
+    def review_font_size(self):
+        return self.config.getint('ReviewWindow', 'font_size', fallback=18)
+
+    @property
+    def review_word_color(self):
+        return self.config.get('ReviewWindow', 'word_color', fallback='#FFFFFF')
+
+    @property
+    def review_box_indicator_color(self):
+        return self.config.get('ReviewWindow', 'box_indicator_color', fallback='#4A90D9')
+
+    @property
+    def review_last_position(self):
+        try:
+            x = self.config.get('ReviewWindow', 'last_position_x', fallback='')
+            y = self.config.get('ReviewWindow', 'last_position_y', fallback='')
+            if x and y:
+                return (int(x), int(y))
+            return None
+        except:
+            return None
+
+    @review_last_position.setter
+    def review_last_position(self, value):
+        if value and len(value) == 2:
+            self.config.set('ReviewWindow', 'last_position_x', str(value[0]))
+            self.config.set('ReviewWindow', 'last_position_y', str(value[1]))
+            self.save()
+
+    # ========== ReviewWindow 布局配置 ==========
+
+    @property
+    def review_window_width(self) -> int:
+        return self.config.getint('ReviewWindow.Layout', 'window_width', fallback=240)
+
+    @property
+    def review_window_height(self) -> int:
+        return self.config.getint('ReviewWindow.Layout', 'window_height', fallback=140)
+
+    @property
+    def review_row1_height(self) -> int:
+        return self.config.getint('ReviewWindow.Layout', 'row1_height', fallback=30)
+
+    @property
+    def review_row2_height(self) -> int:
+        return self.config.getint('ReviewWindow.Layout', 'row2_height', fallback=20)
+
+    @property
+    def review_row3_height(self) -> int:
+        return self.config.getint('ReviewWindow.Layout', 'row3_height', fallback=50)
+
+    @property
+    def review_row4_height(self) -> int:
+        return self.config.getint('ReviewWindow.Layout', 'row4_height', fallback=40)
+
+    @property
+    def review_padding(self) -> tuple:
+        """返回 (left, top, right, bottom)"""
+        left = self.config.getint('ReviewWindow.Layout', 'padding_left', fallback=12)
+        right = self.config.getint('ReviewWindow.Layout', 'padding_right', fallback=12)
+        top = self.config.getint('ReviewWindow.Layout', 'padding_top', fallback=8)
+        bottom = self.config.getint('ReviewWindow.Layout', 'padding_bottom', fallback=8)
+        return (left, top, right, bottom)
+
+    @property
+    def review_element_spacing(self) -> int:
+        return self.config.getint('ReviewWindow.Layout', 'element_spacing', fallback=10)
+
+    @property
+    def review_play_btn_diameter(self) -> int:
+        return self.config.getint('ReviewWindow.Layout', 'play_btn_diameter', fallback=28)
+
+    @property
+    def review_action_btn_size(self) -> tuple:
+        """返回 (width, height)"""
+        w = self.config.getint('ReviewWindow.Layout', 'action_btn_width', fallback=80)
+        h = self.config.getint('ReviewWindow.Layout', 'action_btn_height', fallback=32)
+        return (w, h)
+
+    @property
+    def review_action_btn_spacing(self) -> int:
+        return self.config.getint('ReviewWindow.Layout', 'action_btn_spacing', fallback=20)
+
+    @property
+    def review_toggle_size(self) -> tuple:
+        """返回 (width, height)"""
+        w = self.config.getint('ReviewWindow.Layout', 'toggle_width', fallback=36)
+        h = self.config.getint('ReviewWindow.Layout', 'toggle_height', fallback=18)
+        return (w, h)
+
+    @property
+    def review_toggle_colors(self) -> dict:
+        """返回 Toggle 颜色配置"""
+        return {
+            'off': self.config.get('ReviewWindow.Layout', 'toggle_off_color', fallback='#555555'),
+            'on': self.config.get('ReviewWindow.Layout', 'toggle_on_color', fallback='#4A90D9'),
+            'knob': self.config.get('ReviewWindow.Layout', 'toggle_knob_color', fallback='#FFFFFF')
+        }
+
+    @property
+    def review_word_font_size_override(self) -> int:
+        """返回 0 表示使用 QSS 中的值"""
+        return self.config.getint('ReviewWindow.Layout', 'word_font_size_override', fallback=0)
+
 # Global instance
 try:
     current_dir = os.path.dirname(os.path.abspath(__file__))

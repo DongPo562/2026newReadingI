@@ -1,0 +1,433 @@
+# 复习单词界面 - 分阶段 AI 编程提示词
+
+## 开发策略说明
+
+本功能采用 UI 优先的开发策略，先完成界面框架和交互，再逐步填入后端逻辑。每个阶段独立可运行、可验证，避免一次性开发导致的调试困难。
+
+---
+
+## 阶段一：纯 UI 框架 + Mock 数据（深色主题）
+
+### 任务目标
+
+在 floating_[ui.py](http://ui.py) 中创建 ReviewWindow 类，实现与主界面统一的深色主题界面布局，使用硬编码的假数据验证界面效果。
+
+### 具体要求
+
+**1. 创建 ReviewWindow 类**
+
+- 继承 QWidget，设置窗口属性：无边框、置顶、半透明
+- 窗口尺寸默认 240 像素宽 × 140 像素高
+- 窗口背景色 #2D2D2D（深色，与主界面一致）
+- 透明度默认 0.95
+- 支持鼠标拖拽移动窗口
+
+**2. 实现四行布局**
+
+第一行控制区（高度 30px）：
+
+- 左侧：Auto 文字标签 + Toggle 开关（与主界面风格一致）
+    - Toggle 开关：宽 36px，高 18px
+    - 关闭状态背景 #555555，开启状态背景 #4A90D9
+    - 滑块为白色圆形
+- 中间：循环次数点击按钮，显示 x1/x2/x3
+    - 点击循环切换：x1 → x2 → x3 → x1
+    - 按钮背景透明，文字白色 #FFFFFF
+- 右侧：关闭按钮（X 图标），白色，悬停时红色 #E74C3C
+
+第二行统计信息（高度 20px）：
+
+- 居中显示「待复习: N  今日完成: M」
+- 灰色小字体 #888888，12px
+- 无边框装饰
+
+第三行单词显示区（高度 50px）：
+
+- 左侧：圆形橙色播放按钮（与主界面一致）
+    - 直径 28px，背景色 #F5A623
+    - 内部白色三角形播放图标
+    - 悬停时背景色变亮 #F6B73C
+- 右侧：单词文本
+    - 字体 18px，白色 #FFFFFF
+    - 左对齐，与播放按钮间距 10px
+
+第四行操作按钮（高度 40px）：
+
+- 两个按钮水平居中排列，间距 20px
+- 「不记得」按钮：
+    - 背景色 #E74C3C（红色）
+    - 圆角 6px，宽 80px，高 32px
+    - 文字白色 #FFFFFF，14px
+- 「记得」按钮：
+    - 背景色 #27AE60（绿色）
+    - 圆角 6px，宽 80px，高 32px
+    - 文字白色 #FFFFFF，14px
+
+**3. 使用 Mock 数据**
+
+在类中定义一个假数据列表用于测试：
+
+- 包含 3-5 个测试单词，如 beautiful、language、remember、important、vocabulary
+- 每个单词对应一个假的 number 值（如 1、2、3）和假的 box_level 值
+- 当前单词索引从 0 开始
+
+**4. 按钮点击行为（仅日志）**
+
+- 点击「记得」按钮：打印日志「用户点击了记得按钮，当前单词：xxx」，然后切换到下一个单词
+- 点击「不记得」按钮：打印日志「用户点击了不记得按钮，当前单词：xxx」，然后切换到下一个单词
+- 点击播放按钮：打印日志「用户点击了播放按钮，当前单词：xxx」
+- 当所有单词遍历完毕，显示「太棒了！没有需要复习的单词」（白色文字）
+
+**5. 窗口位置记忆**
+
+- 窗口关闭时，将当前位置保存到 config.ini 的 ReviewWindow 节
+- 窗口打开时，从 config.ini 读取上次位置并恢复
+- 如果没有保存的位置，默认显示在屏幕中央
+
+**6. 启动入口**
+
+- 在 ListPanel 类的**第二行**（日期下拉框所在行）右侧添加「Review」按钮
+    - 按钮背景色 #9B59B6（紫色）
+    - 圆角 4px，文字白色
+    - 位置：日期下拉框右侧，避免撑宽主界面第一行
+- 点击该按钮时创建并显示 ReviewWindow 实例
+- 如果窗口已存在，则将其激活到前台
+
+### 验证方式
+
+- 启动程序后，点击 Review 按钮，复习窗口正常弹出
+- 四行布局正确显示，深色主题与主界面一致
+- Toggle 开关点击切换状态，循环按钮点击切换 x1/x2/x3
+- 点击「记得」或「不记得」按钮，控制台输出对应日志
+- 点击播放按钮，控制台输出对应日志
+- 单词能正确切换，遍历完毕后显示完成提示
+- 拖拽窗口移动后关闭，再次打开时位置被记住
+- Review 按钮在第二行，主界面宽度不变
+
+### 需要修改的文件
+
+- floating_ui.py：新增 ReviewWindow 类，修改 ListPanel 类添加 Review 按钮
+- config.ini：新增 ReviewWindow 配置节
+- config_loader.py：新增读取 ReviewWindow 配置的属性
+
+---
+
+## 阶段二：音频播放集成
+
+### 任务目标
+
+将现有的音频播放逻辑集成到复习窗口，实现自动播放和手动播放功能。
+
+### 具体要求
+
+**1. 复用现有播放逻辑**
+
+- 参考 AudioPlayer 类的实现方式
+- 根据当前单词的 number 值定位音频文件，路径为 audio 目录下的 {number}.wav
+
+**2. 手动播放**
+
+- 点击播放按钮时，播放当前单词的音频
+- 根据循环次数下拉框的值，循环播放指定次数
+- 循环间隔 0.5 秒
+
+**3. 自动播放**
+
+- 当 Auto 复选框勾选时，单词切换后自动播放
+- 播放前延迟 1 秒（延迟时间从 config.ini 读取）
+- 切换到下一个单词时，立即停止上一个单词的播放
+
+**4. 播放状态指示**
+
+- 播放中时，播放按钮显示为暂停图标或不同颜色
+- 播放结束后恢复为播放图标
+
+**5. 错误处理**
+
+- 如果音频文件不存在，静默跳过，不影响复习流程
+- 在控制台打印警告日志
+
+### 验证方式
+
+- 确保 audio 目录下存在至少一个测试音频文件（如 1.wav）
+- 修改 Mock 数据中某个单词的 number 为 1
+- 点击播放按钮，音频正常播放
+- 勾选 Auto 后切换单词，延迟 1 秒后自动播放
+- 设置循环次数为 x2 或 x3，音频正确循环
+
+### 需要修改的文件
+
+- floating_ui.py：在 ReviewWindow 类中添加播放逻辑
+- config.ini：添加 auto_play_delay 等播放相关配置
+- config_loader.py：添加对应配置属性
+
+---
+
+## 阶段三：数据库字段扩展 + 迁移
+
+### 任务目标
+
+扩展数据库表结构，添加 Leitner 盒子系统所需的字段，并编写迁移逻辑初始化现有数据。
+
+### 具体要求
+
+**1. 新增数据库字段**
+
+在 recordings 表中添加以下字段：
+
+- box_level（INTEGER）：当前盒子等级，默认值 1
+- next_review_date（DATE）：下次复习日期
+- last_review_date（DATE）：上次复习日期，默认值 NULL
+
+**2. 修改 db_manager.py**
+
+在 init_db 方法中：
+
+- 检测表是否已有新字段
+- 如果没有，执行 ALTER TABLE 添加字段
+- 为现有记录设置初始值：box_level 设为 1，next_review_date 设为当前日期
+
+**3. 迁移逻辑要点**
+
+- 迁移应该是幂等的，多次执行不会出错
+- 使用 try-except 包裹 ALTER TABLE，忽略「字段已存在」的错误
+- 迁移完成后在控制台打印日志
+
+### 验证方式
+
+- 备份现有的 data.db 文件
+- 启动程序，检查控制台是否输出迁移日志
+- 使用 SQLite 工具打开 data.db，确认新字段已添加
+- 确认现有记录的 box_level 为 1，next_review_date 为当前日期
+- 再次启动程序，确认不会重复迁移或报错
+
+### 需要修改的文件
+
+- db_manager.py：修改 init_db 方法，添加迁移逻辑
+
+---
+
+## 阶段四：单词识别 + 数据联调
+
+### 任务目标
+
+实现单词识别函数，将复习窗口从 Mock 数据切换到真实数据库数据，并实现「记得」「不记得」按钮的完整逻辑。
+
+### 具体要求
+
+**1. 实现单词识别函数**
+
+在 text_processor.py 中添加 is_valid_word 函数：
+
+- 输入：字符串
+- 输出：布尔值，True 表示是合法单词
+- 规则：仅英文字母、连字符、撇号，无空格，长度不超过 35 字符
+- 正则表达式参考：^[a-zA-Z]+(['-][a-zA-Z]+)*$
+
+**2. 新增数据库查询方法**
+
+在 db_manager.py 中添加以下方法：
+
+get_words_to_review 方法：
+
+- 查询 next_review_date 小于等于今天的所有记录
+- 按 box_level 升序、next_review_date 升序排列
+- 返回记录列表
+
+update_word_box 方法：
+
+- 参数：number、box_level、next_review_date、remember、forget、last_review_date
+- 更新指定记录的这些字段
+
+get_review_stats 方法：
+
+- 返回字典，包含 pending（待复习数量）和 completed（今日已完成数量）
+- completed 的计算方式：last_review_date 等于今天且是合法单词的记录数
+
+**3. 修改 ReviewWindow 类**
+
+初始化时：
+
+- 调用 get_words_to_review 获取待复习记录
+- 使用 is_valid_word 过滤出合法单词
+- 如果没有待复习单词，显示空状态提示
+
+点击「记得」按钮：
+
+- remember 字段加 1
+- last_review_date 设为今天
+- box_level 加 1（上限 5）
+- 根据新的 box_level 获取间隔天数（从 config.ini 读取）
+- next_review_date 设为今天加上间隔天数
+- 调用 update_word_box 保存到数据库
+- 切换到下一个单词
+
+点击「不记得」按钮：
+
+- forget 字段加 1
+- last_review_date 设为今天
+- box_level 设为 1
+- next_review_date 设为明天
+- 调用 update_word_box 保存到数据库
+- 切换到下一个单词
+
+**4. 更新统计信息**
+
+- 每次切换单词后，调用 get_review_stats 更新底部统计信息
+- 显示格式：「待复习: N 今日完成: M」
+
+**5. 按钮防抖**
+
+- 按钮点击后禁用 300 毫秒
+- 数据库写入完成后才重新启用
+
+### 验证方式
+
+- 确保数据库中有一些测试记录，包含单词和句子
+- 打开复习窗口，只显示单词，不显示句子
+- 点击「记得」按钮后，查看数据库，确认 box_level 增加、next_review_date 更新
+- 点击「不记得」按钮后，确认 box_level 变为 1、next_review_date 为明天
+- 统计信息正确更新
+
+### 需要修改的文件
+
+- text_processor.py：添加 is_valid_word 函数
+- db_manager.py：添加 get_words_to_review、update_word_box、get_review_stats 方法
+- floating_ui.py：修改 ReviewWindow 类使用真实数据
+- config.ini：添加 box_1_interval 到 box_5_interval 配置项
+- config_loader.py：添加盒子间隔配置属性
+
+---
+
+## 阶段五：录音保存时初始化
+
+### 任务目标
+
+修改录音保存逻辑，当录入的内容是合法单词时，自动初始化复习相关字段。
+
+### 具体要求
+
+**1. 修改 audio_recorder.py**
+
+在 save_file 方法中，录音保存到数据库后：
+
+- 调用 is_valid_word 判断 content 是否为合法单词
+- 如果是单词，调用 update_word_box 初始化字段：
+    - box_level 设为 1
+    - next_review_date 设为今天
+    - remember 设为 0
+    - forget 设为 0
+    - last_review_date 设为 NULL
+
+**2. 注意事项**
+
+- 需要在 audio_recorder.py 中导入 is_valid_word 函数
+- 需要能访问 DatabaseManager 实例
+
+### 验证方式
+
+- 启动程序，选中一个英文单词触发录音
+- 录音完成后，查看数据库，确认新记录的 box_level 为 1、next_review_date 为今天
+- 选中一个英文句子触发录音，确认 box_level 和 next_review_date 保持默认值或为 NULL
+
+### 需要修改的文件
+
+- audio_recorder.py：在 save_file 方法中添加单词初始化逻辑
+
+---
+
+## 阶段六：主界面联动（可选）
+
+### 任务目标
+
+实现主界面删除录音时，复习窗口实时刷新。
+
+### 具体要求
+
+- 在 ListPanel 删除录音后，发送信号通知 ReviewWindow
+- ReviewWindow 收到信号后，重新查询待复习列表
+- 如果当前显示的单词被删除，自动切换到下一个
+
+### 验证方式
+
+- 同时打开主界面和复习窗口
+- 在主界面删除一个单词的录音
+- 复习窗口自动刷新，该单词不再显示
+
+### 需要修改的文件
+
+- floating_ui.py：添加信号槽连接逻辑
+
+---
+
+## 配置项完整清单
+
+以下是本功能需要在 config.ini 中新增的所有配置项：
+
+[ReviewWindow] 配置节：
+
+界面配置：
+
+- window_width = 220
+- window_height = 140
+- opacity = 0.9
+- last_position_x = （运行时保存）
+- last_position_y = （运行时保存）
+- font_size = 18
+- word_color = #333333
+- box_indicator_color = #4A90D9
+
+播放配置：
+
+- auto_play_enabled = false
+- auto_play_loop = 1
+- manual_play_loop = 1
+- auto_play_delay = 1.0
+
+Leitner 盒子配置：
+
+- box_1_interval = 1
+- box_2_interval = 2
+- box_3_interval = 4
+- box_4_interval = 7
+- box_5_interval = 14
+- max_box_level = 5
+
+单词验证：
+
+- max_word_length = 35
+
+---
+
+## 各阶段完成检查清单
+
+阶段一完成标志：
+
+- 复习窗口能正常打开和关闭
+- 五行布局正确无错位
+- Mock 数据正常显示和切换
+- 窗口位置能记忆
+
+阶段二完成标志：
+
+- 手动播放功能正常
+- 自动播放功能正常
+- 循环播放功能正常
+
+阶段三完成标志：
+
+- 数据库新字段添加成功
+- 现有数据迁移完成
+- 多次启动不重复迁移
+
+阶段四完成标志：
+
+- 单词识别函数正确过滤
+- 真实数据正常显示
+- 按钮操作正确更新数据库
+- 统计信息正确显示
+
+阶段五完成标志：
+
+- 新录入的单词自动初始化复习字段
+- 句子不受影响
