@@ -33,7 +33,6 @@ class Config:
     def save_dir(self):
         return self.config.get('Paths', 'save_dir', fallback='audio')
 
-    # UI Settings
     @property
     def ui_ball_diameter(self):
         return self.config.getint('UI', 'ball_diameter', fallback=45)
@@ -119,7 +118,6 @@ class Config:
             self.config.set('UI', 'last_position', f"{value[0]},{value[1]}")
             self.save()
 
-    # Top Bar Configuration
     @property
     def ui_top_bar_spacing(self):
         return self.config.getint('UI', 'top_bar_spacing', fallback=10)
@@ -148,7 +146,6 @@ class Config:
     def ui_toggle_height(self):
         return self.config.getint('UI', 'toggle_height', fallback=26)
 
-    # PlayMode Settings
     @property
     def play_last_mode(self):
         return self.config.get('PlayMode', 'last_mode', fallback='mode2')
@@ -176,7 +173,6 @@ class Config:
         self.config.set('PlayMode', 'auto_enabled', str(value))
         self.save()
 
-    # SlowAudio Settings
     @property
     def slow_generate_versions(self):
         return self.config.getboolean('SlowAudio', 'generate_slow_versions', fallback=True)
@@ -189,7 +185,6 @@ class Config:
         except:
             return [0.5, 0.75]
 
-    # WordGame Settings
     @property
     def game_min_text_length(self):
         return self.config.getint('WordGame', 'min_text_length', fallback=30)
@@ -206,7 +201,6 @@ class Config:
     def game_window_height(self):
         return self.config.getint('WordGame', 'game_window_height', fallback=500)
 
-    # ContextMenu Settings
     @property
     def menu_bg_color(self):
         return self.config.get('ContextMenu', 'bg_color', fallback='#2b2b2b')
@@ -227,7 +221,6 @@ class Config:
     def menu_font_size(self):
         return self.config.getint('ContextMenu', 'font_size', fallback=14)
 
-    # DateFilter Settings
     @property
     def date_row_height(self):
         return self.config.getint('DateFilter', 'date_row_height', fallback=30)
@@ -247,7 +240,7 @@ class Config:
     @property
     def empty_list_hint_text(self):
         return self.config.get('DateFilter', 'empty_list_hint_text', fallback='今天没有录音')
-        
+
     @property
     def empty_list_hint_color(self):
         return self.config.get('DateFilter', 'empty_list_hint_color', fallback='#888888')
@@ -256,12 +249,10 @@ class Config:
     def max_display_dates(self):
         return self.config.getint('DateFilter', 'max_display_dates', fallback=15)
 
-    # Cleanup Settings
     @property
     def cleanup_delay_seconds(self):
         return self.config.getint('Cleanup', 'cleanup_delay_seconds', fallback=60)
 
-    # Database Settings
     @property
     def db_path(self):
         return self.config.get('Database', 'db_path', fallback='data.db')
@@ -278,7 +269,6 @@ class Config:
     def db_retry_count(self):
         return self.config.getint('Database', 'retry_count', fallback=3)
 
-    # ReviewWindow Settings
     @property
     def review_window_width(self):
         return self.config.getint('ReviewWindow', 'window_width', fallback=240)
@@ -321,8 +311,6 @@ class Config:
             self.config.set('ReviewWindow', 'last_position_y', str(value[1]))
             self.save()
 
-    # ========== ReviewWindow 布局配置 ==========
-
     @property
     def review_window_width(self) -> int:
         return self.config.getint('ReviewWindow.Layout', 'window_width', fallback=240)
@@ -349,7 +337,6 @@ class Config:
 
     @property
     def review_padding(self) -> tuple:
-        """返回 (left, top, right, bottom)"""
         left = self.config.getint('ReviewWindow.Layout', 'padding_left', fallback=12)
         right = self.config.getint('ReviewWindow.Layout', 'padding_right', fallback=12)
         top = self.config.getint('ReviewWindow.Layout', 'padding_top', fallback=8)
@@ -366,7 +353,6 @@ class Config:
 
     @property
     def review_action_btn_size(self) -> tuple:
-        """返回 (width, height)"""
         w = self.config.getint('ReviewWindow.Layout', 'action_btn_width', fallback=80)
         h = self.config.getint('ReviewWindow.Layout', 'action_btn_height', fallback=32)
         return (w, h)
@@ -377,14 +363,12 @@ class Config:
 
     @property
     def review_toggle_size(self) -> tuple:
-        """返回 (width, height)"""
         w = self.config.getint('ReviewWindow.Layout', 'toggle_width', fallback=36)
         h = self.config.getint('ReviewWindow.Layout', 'toggle_height', fallback=18)
         return (w, h)
 
     @property
     def review_toggle_colors(self) -> dict:
-        """返回 Toggle 颜色配置"""
         return {
             'off': self.config.get('ReviewWindow.Layout', 'toggle_off_color', fallback='#555555'),
             'on': self.config.get('ReviewWindow.Layout', 'toggle_on_color', fallback='#4A90D9'),
@@ -393,10 +377,52 @@ class Config:
 
     @property
     def review_word_font_size_override(self) -> int:
-        """返回 0 表示使用 QSS 中的值"""
         return self.config.getint('ReviewWindow.Layout', 'word_font_size_override', fallback=0)
 
-# Global instance
+    @property
+    def review_auto_play_delay(self) -> float:
+        return self.config.getfloat('ReviewWindow', 'auto_play_delay', fallback=1.0)
+
+    # ==================== 阶段四：Leitner 盒子间隔配置 ====================
+    @property
+    def review_box_1_interval(self) -> int:
+        return self.config.getint('ReviewWindow', 'box_1_interval', fallback=1)
+
+    @property
+    def review_box_2_interval(self) -> int:
+        return self.config.getint('ReviewWindow', 'box_2_interval', fallback=2)
+
+    @property
+    def review_box_3_interval(self) -> int:
+        return self.config.getint('ReviewWindow', 'box_3_interval', fallback=4)
+
+    @property
+    def review_box_4_interval(self) -> int:
+        return self.config.getint('ReviewWindow', 'box_4_interval', fallback=7)
+
+    @property
+    def review_box_5_interval(self) -> int:
+        return self.config.getint('ReviewWindow', 'box_5_interval', fallback=14)
+
+    @property
+    def review_max_box_level(self) -> int:
+        return self.config.getint('ReviewWindow', 'max_box_level', fallback=5)
+
+    @property
+    def review_max_word_length(self) -> int:
+        return self.config.getint('ReviewWindow', 'max_word_length', fallback=35)
+
+    def get_box_interval(self, box_level):
+        """根据盒子等级获取间隔天数"""
+        intervals = {
+            1: self.review_box_1_interval,
+            2: self.review_box_2_interval,
+            3: self.review_box_3_interval,
+            4: self.review_box_4_interval,
+            5: self.review_box_5_interval,
+        }
+        return intervals.get(box_level, 14)
+
 try:
     current_dir = os.path.dirname(os.path.abspath(__file__))
     config_path = os.path.join(current_dir, 'config.ini')

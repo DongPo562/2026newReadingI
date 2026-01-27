@@ -44,9 +44,7 @@ class MainApp:
         self.processing_thread = None
         self.stop_processing_flag = False
         
-        print("[App] Initialized. Listening for events...")
-
-    def stop_current_tasks(self):
+        print("[App] Initialized. Listening for events...")    def stop_current_tasks(self):
         """
         Stops any running recording or processing.
         """
@@ -58,9 +56,7 @@ class MainApp:
             self.current_recorder = None
             
         # Signal processing thread to stop (if we could)
-        self.stop_processing_flag = True
-
-    def on_click(self, x, y, button, pressed):
+        self.stop_processing_flag = True    def on_click(self, x, y, button, pressed):
         if button != mouse.Button.left:
             return
 
@@ -102,9 +98,7 @@ class MainApp:
         # Start new processing in a thread
         self.stop_processing_flag = False
         self.processing_thread = threading.Thread(target=self.run_process_flow)
-        self.processing_thread.start()
-
-    def run_process_flow(self):
+        self.processing_thread.start()    def run_process_flow(self):
         # 1. Clipboard Capture
         # This takes ~0.6s. 
         # Check flag occasionally?
@@ -143,9 +137,7 @@ class MainApp:
         # 3. Audio Recording
         # Create recorder
         self.current_recorder = AudioRecorder(new_content)
-        self.current_recorder.start()
-
-    def shutdown(self):
+        self.current_recorder.start()    def shutdown(self):
         print("[App] Shutting down...")
         self.stop_current_tasks()
         if hasattr(self, 'listener') and self.listener:

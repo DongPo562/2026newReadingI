@@ -21,9 +21,7 @@ def perform_copy():
     """Simulates Ctrl+C"""
     with keyboard.pressed(Key.ctrl):
         keyboard.press('c')
-        keyboard.release('c')
-
-def capture_selection():
+        keyboard.release('c')def capture_selection():
     """
     Orchestrates the capture process:
     1. Backup old clipboard.
@@ -62,4 +60,3 @@ def capture_selection():
     print(f"[Clipboard] Captured: {repr(new_content)[:50]}...")
     
     return new_content
-

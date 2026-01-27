@@ -13,43 +13,29 @@ class DatabaseManager:
         self.connection = None
 
     def connect(self):
-        """Establish a database connection with configured settings."""
         try:
-            # check_same_thread=False allows using the connection across multiple threads
-            # This is useful for the UI process which has background threads
             self.connection = sqlite3.connect(self.db_path, check_same_thread=False)
-            
-            # Set busy timeout to avoid 'database is locked' errors
             self.connection.execute(f"PRAGMA busy_timeout = {self.busy_timeout}")
-            
-            # Enable WAL mode if configured
             if self.wal_mode:
                 self.connection.execute("PRAGMA journal_mode=WAL")
-            
-            # Return rows as dictionary-like objects
             self.connection.row_factory = sqlite3.Row
-            
         except sqlite3.Error as e:
             print(f"Database connection error: {e}")
             raise
 
     def get_connection(self):
-        """Get the underlying sqlite3 connection object."""
         if not self.connection:
             self.connect()
         return self.connection
 
     def close(self):
-        """Close the database connection."""
         if self.connection:
             self.connection.close()
             self.connection = None
 
     def init_db(self):
-        """Initialize the database schema."""
         if not self.connection:
             self.connect()
-        
         create_table_sql = """
         CREATE TABLE IF NOT EXISTS recordings (
             number INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -60,26 +46,25 @@ class DatabaseManager:
         );
         """
         create_index_sql = "CREATE INDEX IF NOT EXISTS idx_date ON recordings(date);"
-        
         try:
             with self.connection:
                 self.connection.execute(create_table_sql)
                 self.connection.execute(create_index_sql)
+            # 阶段三：执行字段迁移
+            self.migrate_add_review_fields()
         except sqlite3.Error as e:
             print(f"Database initialization error: {e}")
             raise
 
     def _execute_with_retry(self, operation_func):
-        """Execute a database operation with retries."""
         if not self.connection:
             self.connect()
-
         for attempt in range(self.retry_count):
             try:
                 return operation_func()
             except sqlite3.OperationalError as e:
                 if "locked" in str(e) and attempt < self.retry_count - 1:
-                    time.sleep(0.1 * (attempt + 1))  # Exponential backoff
+                    time.sleep(0.1 * (attempt + 1))
                     continue
                 else:
                     raise
@@ -87,7 +72,6 @@ class DatabaseManager:
                 raise
 
     def insert_recording(self, content, date_str):
-        """Insert a new recording and return the generated number."""
         def operation():
             cursor = self.connection.cursor()
             cursor.execute(
@@ -96,20 +80,16 @@ class DatabaseManager:
             )
             self.connection.commit()
             return cursor.lastrowid
-            
         return self._execute_with_retry(operation)
 
     def delete_recording(self, number):
-        """Delete a recording by its number."""
         def operation():
             cursor = self.connection.cursor()
             cursor.execute("DELETE FROM recordings WHERE number = ?", (number,))
             self.connection.commit()
-            
         return self._execute_with_retry(operation)
 
     def get_recordings_by_date(self, date_str):
-        """Get all recordings for a specific date, ordered by number DESC."""
         def operation():
             cursor = self.connection.cursor()
             cursor.execute(
@@ -117,74 +97,151 @@ class DatabaseManager:
                 (date_str,)
             )
             return cursor.fetchall()
-            
         return self._execute_with_retry(operation)
 
     def get_all_dates(self, limit=15):
-        """Get distinct dates from recordings, ordered by date DESC."""
         def operation():
             cursor = self.connection.cursor()
             cursor.execute(
                 f"SELECT DISTINCT date FROM recordings ORDER BY date DESC LIMIT {limit}"
             )
             return [row['date'] for row in cursor.fetchall()]
-            
         return self._execute_with_retry(operation)
 
     def get_content(self, number):
-        """Get the content text for a specific recording."""
         def operation():
             cursor = self.connection.cursor()
             cursor.execute("SELECT content FROM recordings WHERE number = ?", (number,))
             row = cursor.fetchone()
             return row['content'] if row else None
-            
         return self._execute_with_retry(operation)
 
     def get_dates_exceeding_limit(self, limit=15):
-        """Get list of dates that should be cleaned up (older than the newest limit dates)."""
         def operation():
             cursor = self.connection.cursor()
-            # Get all dates ordered by date DESC
             cursor.execute("SELECT DISTINCT date FROM recordings ORDER BY date DESC")
             all_dates = [row['date'] for row in cursor.fetchall()]
-            
             if len(all_dates) > limit:
-                # Return dates that are outside the kept range
-                # We keep the first 'limit' dates (newest), so we return the rest
-                return sorted(all_dates[limit:]) # Return older dates sorted asc
+                return sorted(all_dates[limit:])
             return []
-            
         return self._execute_with_retry(operation)
 
     def get_recordings_by_date_list(self, date_list):
-        """Get all recordings for a list of dates."""
         if not date_list:
             return []
-            
         def operation():
             cursor = self.connection.cursor()
             placeholders = ','.join(['?'] * len(date_list))
             query = f"SELECT number, date FROM recordings WHERE date IN ({placeholders})"
             cursor.execute(query, date_list)
             return cursor.fetchall()
-            
         return self._execute_with_retry(operation)
 
     def get_all_recordings_for_consistency_check(self):
-        """Get all recording numbers and dates for consistency check."""
         def operation():
             cursor = self.connection.cursor()
             cursor.execute("SELECT number, date FROM recordings")
             return cursor.fetchall()
-            
         return self._execute_with_retry(operation)
 
     def get_recording_by_number(self, number):
-        """Get a single recording by number."""
         def operation():
             cursor = self.connection.cursor()
             cursor.execute("SELECT * FROM recordings WHERE number = ?", (number,))
             return cursor.fetchone()
+        return self._execute_with_retry(operation)
+
+    # ==================== 阶段三：数据库字段扩展 + 迁移 ====================
+
+    def migrate_add_review_fields(self):
+        """迁移：添加 Leitner 盒子系统所需的字段"""
+        if not self.connection:
+            self.connect()
+        
+        from datetime import date
+        today = date.today().isoformat()
+        
+        migrations = [
+            ("box_level", "INTEGER DEFAULT 1"),
+            ("next_review_date", "DATE"),
+            ("last_review_date", "DATE")
+        ]
+        
+        for field_name, field_type in migrations:
+            try:
+                self.connection.execute(f"ALTER TABLE recordings ADD COLUMN {field_name} {field_type}")
+                print(f"[Migration] Added column: {field_name}")
+            except sqlite3.OperationalError as e:
+                if "duplicate column name" in str(e).lower():
+                    print(f"[Migration] Column already exists: {field_name}")
+                else:
+                    raise
+        
+        # 为现有记录设置初始值
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute(
+                "UPDATE recordings SET box_level = 1, next_review_date = ? WHERE box_level IS NULL",
+                (today,)
+            )
+            if cursor.rowcount > 0:
+                print(f"[Migration] Initialized {cursor.rowcount} existing records")
+            self.connection.commit()
+        except sqlite3.Error as e:
+            print(f"[Migration] Error initializing records: {e}")
+
+    # ==================== 阶段四：复习相关查询方法 ====================
+
+    def get_words_to_review(self):
+        """获取待复习的单词列表（next_review_date <= 今天）"""
+        def operation():
+            from datetime import date
+            today = date.today().isoformat()
+            cursor = self.connection.cursor()
+            cursor.execute(
+                """SELECT number, content, box_level, next_review_date, last_review_date, remember, forget
+                   FROM recordings
+                   WHERE next_review_date <= ?
+                   ORDER BY box_level ASC, next_review_date ASC""",
+                (today,)
+            )
+            return cursor.fetchall()
+        return self._execute_with_retry(operation)
+
+    def update_word_box(self, number, box_level, next_review_date, remember, forget, last_review_date):
+        """更新单词的复习状态"""
+        def operation():
+            cursor = self.connection.cursor()
+            cursor.execute(
+                """UPDATE recordings
+                   SET box_level = ?, next_review_date = ?, remember = ?, forget = ?, last_review_date = ?
+                   WHERE number = ?""",
+                (box_level, next_review_date, remember, forget, last_review_date, number)
+            )
+            self.connection.commit()
+        return self._execute_with_retry(operation)
+
+    def get_review_stats(self):
+        """获取复习统计信息"""
+        def operation():
+            from datetime import date
+            from text_processor import is_valid_word
+            today = date.today().isoformat()
+            cursor = self.connection.cursor()
             
+            # 待复习数量（仅合法单词）
+            cursor.execute(
+                "SELECT content FROM recordings WHERE next_review_date <= ?",
+                (today,)
+            )
+            pending = sum(1 for row in cursor.fetchall() if is_valid_word(row['content']))
+            
+            # 今日已完成数量（仅合法单词）
+            cursor.execute(
+                "SELECT content FROM recordings WHERE last_review_date = ?",
+                (today,)
+            )
+            completed = sum(1 for row in cursor.fetchall() if is_valid_word(row['content']))
+            
+            return {'pending': pending, 'completed': completed}
         return self._execute_with_retry(operation)

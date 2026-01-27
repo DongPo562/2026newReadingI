@@ -6,109 +6,93 @@
 
 ---
 
-## 阶段一：纯 UI 框架 + Mock 数据（深色主题）
+## 阶段一：纯 UI 框架 + Mock 数据（QSS 样式化 + 布局配置化）
 
 ### 任务目标
 
-在 floating_[ui.py](http://ui.py) 中创建 ReviewWindow 类，实现与主界面统一的深色主题界面布局，使用硬编码的假数据验证界面效果。
+在 `floating_ui.py` 中创建 `ReviewWindow` 类，采用 QSS 样式表（`styles/review_window.qss`）进行界面美化，实现三行式布局，并通过 `config.ini` 实现高度可配置化。使用 Mock 数据验证界面效果。
 
 ### 具体要求
 
-**1. 创建 ReviewWindow 类**
+**1. 创建 ReviewWindow 类与样式系统**
 
-- 继承 QWidget，设置窗口属性：无边框、置顶、半透明
-- 窗口尺寸默认 240 像素宽 × 140 像素高
-- 窗口背景色 #2D2D2D（深色，与主界面一致）
-- 透明度默认 0.95
-- 支持鼠标拖拽移动窗口
+- **基类与属性**：继承 `QWidget`，无边框 (`FramelessWindowHint`)、置顶 (`WindowStaysOnTopHint`)、半透明背景。
+- **样式管理**：引入 `StyleManager` 类，负责加载和热重载 `styles/review_window.qss`。
+- **热重载**：支持按 **F5** 键实时重新加载 QSS 样式，方便调试。
+- **尺寸控制**：默认尺寸 280x120（可配置），支持鼠标拖拽移动。
 
-**2. 实现四行布局**
+**2. 实现三行布局 (通过 QSS 控制)**
 
-第一行控制区（高度 30px）：
+所有控件的样式（颜色、字体、边距、尺寸限制）均移至 QSS 文件中定义，Python 代码仅负责结构布局和逻辑。
 
-- 左侧：Auto 文字标签 + Toggle 开关（与主界面风格一致）
-    - Toggle 开关：宽 36px，高 18px
-    - 关闭状态背景 #555555，开启状态背景 #4A90D9
-    - 滑块为白色圆形
-- 中间：循环次数点击按钮，显示 x1/x2/x3
-    - 点击循环切换：x1 → x2 → x3 → x1
-    - 按钮背景透明，文字白色 #FFFFFF
-- 右侧：关闭按钮（X 图标），白色，悬停时红色 #E74C3C
+**第一行：头部控制区 (Header)**
+- 布局：水平布局 (`QHBoxLayout`)
+- 内容：
+    - **左侧**：Auto 文字标签 + Toggle 开关（自定义 Widget，颜色可配置） + 循环次数按钮 (x1/x2/x3)。
+    - **中间**：统计信息标签 (`待复习: N  今日完成: M`)，居中显示。
+    - **右侧**：关闭按钮 (X)。
 
-第二行统计信息（高度 20px）：
+**第二行：单词显示区 (Word Area)**
+- 布局：水平布局，内容整体居中。
+- 内容：
+    - **播放按钮**：圆形，直径 28px (QSS `border-radius: 14px`)。
+    - **单词文本**：白色大字体，紧随播放按钮之后。
 
-- 居中显示「待复习: N  今日完成: M」
-- 灰色小字体 #888888，12px
-- 无边框装饰
+**第三行：操作按钮区 (Action Area)**
+- 布局：水平布局，按钮居中。
+- 内容：
+    - **「不记得」按钮**：红色边框/背景。
+    - **「记得」按钮**：绿色边框/背景。
 
-第三行单词显示区（高度 50px）：
+**3. 配置文件扩展**
 
-- 左侧：圆形橙色播放按钮（与主界面一致）
-    - 直径 28px，背景色 #F5A623
-    - 内部白色三角形播放图标
-    - 悬停时背景色变亮 #F6B73C
-- 右侧：单词文本
-    - 字体 18px，白色 #FFFFFF
-    - 左对齐，与播放按钮间距 10px
+在 `config.ini` 中新增 `[ReviewWindow]` 和 `[ReviewWindow.Layout]` 节，支持配置：
+- 窗口尺寸 (`window_width`, `window_height`)
+- 各行高度 (`row1_height` 等)
+- 控件间距与边距
+- 颜色定义 (Toggle 开关颜色等)
 
-第四行操作按钮（高度 40px）：
-
-- 两个按钮水平居中排列，间距 20px
-- 「不记得」按钮：
-    - 背景色 #E74C3C（红色）
-    - 圆角 6px，宽 80px，高 32px
-    - 文字白色 #FFFFFF，14px
-- 「记得」按钮：
-    - 背景色 #27AE60（绿色）
-    - 圆角 6px，宽 80px，高 32px
-    - 文字白色 #FFFFFF，14px
-
-**3. 使用 Mock 数据**
+**4. 使用 Mock 数据**
 
 在类中定义一个假数据列表用于测试：
-
 - 包含 3-5 个测试单词，如 beautiful、language、remember、important、vocabulary
 - 每个单词对应一个假的 number 值（如 1、2、3）和假的 box_level 值
 - 当前单词索引从 0 开始
 
-**4. 按钮点击行为（仅日志）**
+**5. 按钮点击行为（仅日志）**
 
-- 点击「记得」按钮：打印日志「用户点击了记得按钮，当前单词：xxx」，然后切换到下一个单词
-- 点击「不记得」按钮：打印日志「用户点击了不记得按钮，当前单词：xxx」，然后切换到下一个单词
-- 点击播放按钮：打印日志「用户点击了播放按钮，当前单词：xxx」
-- 当所有单词遍历完毕，显示「太棒了！没有需要复习的单词」（白色文字）
+- 点击「记得」/「不记得」按钮：打印日志并切换到下一个单词。
+- 点击播放按钮：打印日志。
+- 当所有单词遍历完毕，显示「太棒了！没有需要复习的单词」。
 
-**5. 窗口位置记忆**
+**6. 窗口位置记忆**
 
 - 窗口关闭时，将当前位置保存到 config.ini 的 ReviewWindow 节
 - 窗口打开时，从 config.ini 读取上次位置并恢复
 - 如果没有保存的位置，默认显示在屏幕中央
 
-**6. 启动入口**
+**7. 启动入口**
 
 - 在 ListPanel 类的**第二行**（日期下拉框所在行）右侧添加「Review」按钮
     - 按钮背景色 #9B59B6（紫色）
-    - 圆角 4px，文字白色
-    - 位置：日期下拉框右侧，避免撑宽主界面第一行
+    - 位置：日期下拉框右侧
 - 点击该按钮时创建并显示 ReviewWindow 实例
 - 如果窗口已存在，则将其激活到前台
 
 ### 验证方式
 
-- 启动程序后，点击 Review 按钮，复习窗口正常弹出
-- 四行布局正确显示，深色主题与主界面一致
-- Toggle 开关点击切换状态，循环按钮点击切换 x1/x2/x3
-- 点击「记得」或「不记得」按钮，控制台输出对应日志
-- 点击播放按钮，控制台输出对应日志
-- 单词能正确切换，遍历完毕后显示完成提示
-- 拖拽窗口移动后关闭，再次打开时位置被记住
-- Review 按钮在第二行，主界面宽度不变
+- 点击 Review 按钮弹出窗口，样式与 QSS 定义一致。
+- 按 F5 可实时刷新样式（如修改 QSS 中的背景色）。
+- 拖拽窗口、点击 Toggle、循环按钮、播放按钮、记得/不记得按钮均有正确响应（日志输出）。
+- 修改 `config.ini` 中的布局参数，重启后界面尺寸发生变化。
 
-### 需要修改的文件
+### 需要修改/新增的文件
 
-- floating_ui.py：新增 ReviewWindow 类，修改 ListPanel 类添加 Review 按钮
-- config.ini：新增 ReviewWindow 配置节
-- config_loader.py：新增读取 ReviewWindow 配置的属性
+- `floating_ui.py`：新增 ReviewWindow 类，集成 StyleManager
+- `style_manager.py`：新增样式管理器
+- `styles/review_window.qss`：新增样式表文件
+- `config.ini`：新增 ReviewWindow 及 Layout 配置节
+- `config_loader.py`：新增读取 ReviewWindow 配置的属性
 
 ---
 
@@ -368,14 +352,38 @@ get_review_stats 方法：
 
 界面配置：
 
-- window_width = 220
-- window_height = 140
-- opacity = 0.9
+- window_width = 280
+- window_height = 120
+- opacity = 0.95
 - last_position_x = （运行时保存）
 - last_position_y = （运行时保存）
 - font_size = 18
-- word_color = #333333
+- word_color = #FFFFFF
 - box_indicator_color = #4A90D9
+
+[ReviewWindow.Layout] 配置节：
+
+- window_width = 280
+- window_height = 120
+- row1_height = 30
+- row2_height = 20
+- row3_height = 50
+- row4_height = 40
+- padding_left = 12
+- padding_right = 12
+- padding_top = 8
+- padding_bottom = 8
+- element_spacing = 10
+- play_btn_diameter = 28
+- action_btn_width = 80
+- action_btn_height = 32
+- action_btn_spacing = 20
+- toggle_width = 36
+- toggle_height = 18
+- toggle_off_color = #555555
+- toggle_on_color = #4A90D9
+- toggle_knob_color = #FFFFFF
+- word_font_size_override = 0
 
 播放配置：
 
@@ -404,9 +412,10 @@ Leitner 盒子配置：
 阶段一完成标志：
 
 - 复习窗口能正常打开和关闭
-- 五行布局正确无错位
+- 三行布局正确显示，样式符合 QSS 定义
 - Mock 数据正常显示和切换
 - 窗口位置能记忆
+- F5 热重载样式功能正常
 
 阶段二完成标志：
 
