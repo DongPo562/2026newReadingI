@@ -2,6 +2,7 @@ import os
 import subprocess
 import shutil
 
+
 def generate_slow_audio(input_path, speeds=[0.5, 0.75]):
     """
     Generates slow versions of the input audio file using FFmpeg.
@@ -18,7 +19,9 @@ def generate_slow_audio(input_path, speeds=[0.5, 0.75]):
     ffmpeg_cmd = shutil.which("ffmpeg")
     if not ffmpeg_cmd:
         print("[AudioProcessor] FFmpeg not found! Please install FFmpeg to generate slow audio.")
-        return    try:
+        return
+
+    try:
         # Parse filename
         # New Format: {number}.wav -> {number}@{speed}.wav
         dirname = os.path.dirname(input_path)
@@ -26,7 +29,9 @@ def generate_slow_audio(input_path, speeds=[0.5, 0.75]):
         name_without_ext = os.path.splitext(filename)[0]
         ext = os.path.splitext(filename)[1]
 
-        generated_files = []        for speed in speeds:
+        generated_files = []
+
+        for speed in speeds:
             new_filename = f"{name_without_ext}@{speed}{ext}"
             output_path = os.path.join(dirname, new_filename)
 
@@ -54,7 +59,8 @@ def generate_slow_audio(input_path, speeds=[0.5, 0.75]):
             except Exception as e:
                 print(f"[AudioProcessor] Error trying rubberband: {e}")
 
-            # 2. Fallback to Atempo (Standard Quality)            if not success:
+            # 2. Fallback to Atempo (Standard Quality)
+            if not success:
                 try:
                     # atempo supports 0.5 to 2.0
                     cmd = [
@@ -78,6 +84,8 @@ def generate_slow_audio(input_path, speeds=[0.5, 0.75]):
     except Exception as e:
         print(f"[AudioProcessor] Error processing {input_path}: {e}")
         return []
+
+
 if __name__ == "__main__":
     # Test
     pass

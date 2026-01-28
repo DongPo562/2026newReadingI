@@ -4,3 +4,6 @@ __pycache__/
 audio/
 *.log
 text/
+*.db
+*.db-shm
+*.db-wal

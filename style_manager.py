@@ -6,6 +6,7 @@
 import os
 from pathlib import Path
 
+
 class StyleManager:
     """QSS 样式表管理器"""
 

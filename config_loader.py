@@ -1,6 +1,7 @@
 import configparser
 import os
 
+
 class Config:
     def __init__(self, config_path='config.ini'):
         self.config_path = config_path
@@ -416,6 +417,7 @@ class Config:
             5: self.review_box_5_interval,
         }
         return intervals.get(box_level, 14)
+
 
 try:
     current_dir = os.path.dirname(os.path.abspath(__file__))

@@ -4,6 +4,7 @@ from pynput.keyboard import Key, Controller
 
 keyboard = Controller()
 
+
 def get_clipboard_content():
     try:
         return pyperclip.paste()
@@ -11,17 +12,22 @@ def get_clipboard_content():
         print(f"Error reading clipboard: {e}")
         return ""
 
+
 def set_clipboard_content(content):
     try:
         pyperclip.copy(content)
     except Exception as e:
         print(f"Error writing clipboard: {e}")
 
+
 def perform_copy():
     """Simulates Ctrl+C"""
     with keyboard.pressed(Key.ctrl):
         keyboard.press('c')
-        keyboard.release('c')def capture_selection():
+        keyboard.release('c')
+
+
+def capture_selection():
     """
     Orchestrates the capture process:
     1. Backup old clipboard.

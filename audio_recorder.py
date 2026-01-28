@@ -12,6 +12,7 @@ from db_manager import DatabaseManager
 from audio_processor import generate_slow_audio
 from text_processor import is_valid_word
 
+
 class AudioRecorder(threading.Thread):
     def __init__(self, content):
         super().__init__()
