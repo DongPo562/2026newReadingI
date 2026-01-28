@@ -45,7 +45,6 @@ class CommandServer(QThread):
         except Exception as e:
             print(f"Socket Bind Error: {e}")
 
-
 class ConsistencyChecker(QThread):
     finished = pyqtSignal()
 
@@ -96,6 +95,7 @@ class ConsistencyChecker(QThread):
                     print(f"Consistency check warning: failed to remove file {fname}, reason: {e}")
             print(f"Consistency check completed, removed {removed_records} records and {removed_files} files")
             try:
+
                 project_root = os.path.dirname(os.path.abspath(__file__))
                 text_dir = os.path.join(project_root, 'text')
                 if os.path.exists(text_dir):
@@ -118,7 +118,6 @@ class ConsistencyChecker(QThread):
         for fpath in files_to_delete:
             if os.path.exists(fpath):
                 os.remove(fpath)
-
 
 class FileCleaner(QThread):
     def __init__(self, db_manager, list_panel):
@@ -179,7 +178,6 @@ class FileCleaner(QThread):
                 except Exception as e:
                     print(f"Cleanup warning: failed to delete file {os.path.basename(fpath)}, reason: {e}")
 
-
 class ToggleSwitch(QWidget):
     toggled = pyqtSignal(bool)
 
@@ -235,7 +233,6 @@ class ToggleSwitch(QWidget):
         p.setBrush(QColor("white"))
         p.drawEllipse(QPoint(int(self._thumb_pos + self._thumb_radius), int(self.height() / 2)), 
             self._thumb_radius, self._thumb_radius)
-
 
 class AudioPlayer(QObject):
     state_changed = pyqtSignal(QMediaPlayer.PlaybackState)
@@ -350,7 +347,6 @@ class AudioPlayer(QObject):
     def is_playing(self, number):
         return self.current_number == number
 
-
 class FlowLayout(QLayout):
     def __init__(self, parent=None, margin=0, spacing=-1):
         super().__init__(parent)
@@ -423,7 +419,6 @@ class FlowLayout(QLayout):
             line_height = max(line_height, item.sizeHint().height())
         return y + line_height - rect.y()
 
-
 class WordGameWindow(QWidget):
     def __init__(self, full_text, parent=None):
         super().__init__(parent)
@@ -436,7 +431,7 @@ class WordGameWindow(QWidget):
         self.start_game()
 
     def tokenize(self, text):
-        pattern = r"(\w+'\w+|[\$]?\d+%?|\w+|-|[^\w\s])"
+        pattern = r"(\w+'\w+|[$]?\d+%?|\w+|-|[^\w\s])"
         raw_tokens = re.findall(pattern, text)
         return [t for t in raw_tokens if t.strip()]
 
@@ -495,6 +490,7 @@ class WordGameWindow(QWidget):
         scroll_source = QScrollArea()
         scroll_source.setWidget(self.source_area)
         scroll_source.setWidgetResizable(True)
+
         scroll_source.setStyleSheet("background: transparent; border: none;")
         container_layout.addWidget(scroll_source, 1)
         lbl_target = QLabel("已选区")
@@ -626,7 +622,6 @@ class WordGameWindow(QWidget):
         anim.finished.connect(feedback.deleteLater)
         anim.start()
 
-
 class DateFilterComboBox(QComboBox):
     def __init__(self, list_panel, parent=None):
         super().__init__(parent)
@@ -648,7 +643,6 @@ class DateFilterComboBox(QComboBox):
         if not self.list_panel.geometry().contains(cursor_pos) and \
             not self.list_panel.ball_widget.geometry().contains(cursor_pos):
                 self.list_panel.ball_widget.collapse_panel()
-
 
 class ModeSelector(QWidget):
     interaction = pyqtSignal()
@@ -745,7 +739,6 @@ class ModeSelector(QWidget):
             self.loop_lbl.setStyleSheet("color: white; border: none; font-weight: bold;")
         self.loop_lbl.setText(f"x{app_config.play_mode2_loop_count}")
 
-
 class ClickableLabel(QLabel):
     clicked = pyqtSignal()
 
@@ -753,7 +746,6 @@ class ClickableLabel(QLabel):
         if event.button() == Qt.MouseButton.LeftButton:
             self.clicked.emit()
         super().mousePressEvent(event)
-
 
 class AudioListItem(QWidget):
     play_requested = pyqtSignal(int)
@@ -953,7 +945,6 @@ class AudioListItem(QWidget):
         except Exception as e:
             print(f"[Delete] Error: {e}")
 
-
 class ReviewToggleSwitch(ToggleSwitch):
     def paintEvent(self, event):
         p = QPainter(self)
@@ -966,7 +957,6 @@ class ReviewToggleSwitch(ToggleSwitch):
         p.setBrush(QColor(colors['knob']))
         p.drawEllipse(QPoint(int(self._thumb_pos + self._thumb_radius), int(self.height() / 2)), 
             self._thumb_radius, self._thumb_radius)
-
 
 class ReviewWindow(QWidget):
     def __init__(self, db_manager, parent=None):
@@ -1052,6 +1042,7 @@ class ReviewWindow(QWidget):
         row2.setSpacing(0)
         row2.setContentsMargins(0, 0, 0, 0)
         self.btn_play = QPushButton("▶")
+
         self.btn_play.setObjectName("playBtn")
         self.btn_play.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_play.clicked.connect(self.on_play)
@@ -1147,21 +1138,21 @@ class ReviewWindow(QWidget):
     def on_play(self):
         if self.current_index >= len(self.words):
             return
-        
+
         word_data = self.words[self.current_index]
         number = word_data.get('number')
         if not number:
             print(f"[ReviewWindow] 单词 {word_data['word']} 没有对应的音频编号")
             return
-        
+
         audio_path = os.path.join(app_config.save_dir, f"{number}.wav")
         if not os.path.exists(audio_path):
             print(f"[ReviewWindow] 音频文件不存在: {audio_path}")
             return
-        
+
         self.target_play_count = self.loop_count
         self.current_play_count = 0
-        
+
         self._play_audio(audio_path)
 
     def _play_audio(self, audio_path):
@@ -1214,7 +1205,7 @@ class ReviewWindow(QWidget):
         self.btn_play.setProperty("playing", "true" if is_playing else "false")
         self.btn_play.style().unpolish(self.btn_play)
         self.btn_play.style().polish(self.btn_play)
-        
+
         if is_playing:
             self.btn_play.setText("II")
         else:
@@ -1259,7 +1250,6 @@ class ReviewWindow(QWidget):
             print(f"[ReviewWindow] 加载单词失败: {e}")
             return []
 
-
 class ListPanel(QWidget):
     game_requested = pyqtSignal(str)
 
@@ -1303,6 +1293,7 @@ class ListPanel(QWidget):
                 background-color: rgba(255, 255, 255, 0.1);
                 color: {app_config.ui_text_color};
                 border: none;
+
                 border-radius: 4px;
                 padding: 2px 5px;
                 font-size: 13px;
@@ -1349,6 +1340,7 @@ class ListPanel(QWidget):
         self.container_layout.addWidget(line)
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
+
         self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.scroll.setStyleSheet(f"""
             QScrollArea {{}}
@@ -1436,6 +1428,7 @@ class ListPanel(QWidget):
             if not recordings:
                 lbl = QLabel(app_config.empty_list_hint_text)
                 lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
                 lbl.setStyleSheet(f"color: {app_config.empty_list_hint_color}; font-size: {app_config.ui_font_size}px;")
                 self.scroll_layout.insertStretch(0)
                 self.scroll_layout.insertWidget(1, lbl)
@@ -1485,7 +1478,6 @@ class ListPanel(QWidget):
         if self.ball_widget:
             self.ball_widget.raise_()
         super().mousePressEvent(event)
-
 
 class FloatingBall(QWidget):
     def __init__(self):
@@ -1659,7 +1651,6 @@ class FloatingBall(QWidget):
             target_y = ball_geo.y() + self.diameter - target_height
             self.panel.move(target_x, target_y)
             self.raise_() 
-
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

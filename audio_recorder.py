@@ -12,7 +12,6 @@ from db_manager import DatabaseManager
 from audio_processor import generate_slow_audio
 from text_processor import is_valid_word
 
-
 class AudioRecorder(threading.Thread):
     def __init__(self, content):
         super().__init__()
@@ -30,7 +29,9 @@ class AudioRecorder(threading.Thread):
         self.silence_threshold_db = app_config.silence_threshold_db
         self.end_silence_duration = app_config.end_silence_duration
         self.save_dir = app_config.save_dir
-        self.db_manager = DatabaseManager()    def get_loopback_mic(self):
+        self.db_manager = DatabaseManager()
+
+    def get_loopback_mic(self):
         try:
             default_speaker = sc.default_speaker()
             print(f"[Recorder] Default Speaker: {default_speaker.name}")
@@ -50,12 +51,14 @@ class AudioRecorder(threading.Thread):
             return None
 
     def run(self):
-        print("[Recorder] Starting recording process...")        try:
+        print("[Recorder] Starting recording process...")
+        try:
             mic = self.get_loopback_mic()
             if not mic:
                 print("[Recorder] Error: Could not find loopback device.")
                 return
-            print(f"[Recorder] Recording from Loopback: {mic.name}")            with mic.recorder(samplerate=self.samplerate) as recorder:
+            print(f"[Recorder] Recording from Loopback: {mic.name}")
+            with mic.recorder(samplerate=self.samplerate) as recorder:
                 self.start_time = time.time()
                 while self.running:
                     data = recorder.record(numframes=self.blocksize)
@@ -83,13 +86,16 @@ class AudioRecorder(threading.Thread):
                         if db < self.silence_threshold_db:
                             if self.silence_start_time is None:
                                 self.silence_start_time = current_time
+
                             elif (current_time - self.silence_start_time) >= self.end_silence_duration:
                                 print("[Recorder] End silence detected.")
                                 break
                         else:
-                            self.silence_start_time = None        except Exception as e:
+                            self.silence_start_time = None
+        except Exception as e:
             print(f"[Recorder] Error: {e}")
-            return        if self.audio_data:
+            return
+        if self.audio_data:
             self.save_file()
         else:
             print("[Recorder] No audio data captured.")
@@ -121,7 +127,9 @@ class AudioRecorder(threading.Thread):
         try:
             self._save_transaction_with_retry(final_data)
         except Exception as e:
-            print(f"[Recorder] Final save failed: {e}")    def _save_transaction_with_retry(self, final_data):
+            print(f"[Recorder] Final save failed: {e}")
+
+    def _save_transaction_with_retry(self, final_data):
         for attempt in range(app_config.db_retry_count):
             try:
                 self._execute_save_transaction(final_data)
@@ -131,41 +139,43 @@ class AudioRecorder(threading.Thread):
                     print(f"[Recorder] Transaction locked, retrying ({attempt+1})...")
                     time.sleep(0.5)
                     continue
-                raise e    def _execute_save_transaction(self, final_data):
+                raise e
+
+    def _execute_save_transaction(self, final_data):
         conn = self.db_manager.get_connection()
         generated_files = []
         try:
             cursor = conn.cursor()
             date_str = datetime.now().strftime("%Y-%m-%d")
-            
+
             cursor.execute(
                 "INSERT INTO recordings (content, date) VALUES (?, ?)",
                 (self.content, date_str)
             )
             number = cursor.lastrowid
-            
+
             if not os.path.exists(self.save_dir):
                 os.makedirs(self.save_dir)
-            
+
             filename_1x = f"{number}.wav"
             filepath_1x = os.path.join(self.save_dir, filename_1x)
             sf.write(filepath_1x, final_data, self.samplerate)
             generated_files.append(filepath_1x)
-            
+
             if app_config.slow_generate_versions:
                 slow_files = generate_slow_audio(filepath_1x, app_config.slow_speeds)
                 generated_files.extend(slow_files)
-            
+
             # ==================== 阶段五新增：单词初始化 ====================
             # 检测内容是否为合法单词
             if is_valid_word(self.content):
                 self._initialize_word_review_fields(cursor, number, date_str)
             # ==================== 阶段五新增结束 ====================
-            
+
             conn.commit()
             print(f"[Recorder] Successfully saved recording #{number}")
             self.notify_ui()
-            
+
         except Exception as e:
             conn.rollback()
             print(f"Recording save failed: {e}, transaction rolled back")
@@ -177,10 +187,11 @@ class AudioRecorder(threading.Thread):
                 except Exception as cleanup_error:
                     print(f"Rollback cleanup warning: failed to delete {f}, reason: {cleanup_error}")
             raise e
+
     def _initialize_word_review_fields(self, cursor, number, date_str):
         """
         初始化单词的复习相关字段
-        
+
         Args:
             cursor: 数据库游标
             number: 录音记录的 number

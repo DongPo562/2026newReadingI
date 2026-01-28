@@ -6,7 +6,7 @@ def generate_slow_audio(input_path, speeds=[0.5, 0.75]):
     """
     Generates slow versions of the input audio file using FFmpeg.
     Prioritizes 'rubberband' filter for high quality, falls back to 'atempo'.
-    
+
     Args:
         input_path (str): Path to the original audio file.
         speeds (list): List of speed factors (e.g., [0.5, 0.75]).
@@ -25,11 +25,11 @@ def generate_slow_audio(input_path, speeds=[0.5, 0.75]):
         filename = os.path.basename(input_path)
         name_without_ext = os.path.splitext(filename)[0]
         ext = os.path.splitext(filename)[1]
-        
+
         generated_files = []        for speed in speeds:
             new_filename = f"{name_without_ext}@{speed}{ext}"
             output_path = os.path.join(dirname, new_filename)
-            
+
             # 1. Try Rubberband (High Quality)
             success = False
             try:
@@ -42,7 +42,7 @@ def generate_slow_audio(input_path, speeds=[0.5, 0.75]):
                 ]
                 # We capture output to check for errors (like "No such filter")
                 result = subprocess.run(cmd, capture_output=True, text=True)
-                
+
                 if result.returncode == 0:
                     print(f"[AudioProcessor] Generated (Rubberband): {new_filename}")
                     success = True
@@ -50,7 +50,7 @@ def generate_slow_audio(input_path, speeds=[0.5, 0.75]):
                     # If failed (e.g. filter not available), log and fall through
                     # print(f"[AudioProcessor] Rubberband filter failed: {result.stderr.strip()}")
                     pass
-                    
+
             except Exception as e:
                 print(f"[AudioProcessor] Error trying rubberband: {e}")
 
@@ -66,15 +66,15 @@ def generate_slow_audio(input_path, speeds=[0.5, 0.75]):
                     subprocess.run(cmd, check=True, capture_output=True)
                     print(f"[AudioProcessor] Generated (Atempo): {new_filename}")
                     success = True
-                    
+
                 except Exception as e:
                     print(f"[AudioProcessor] Failed to generate {speed}x version: {e}")
-            
+
             if success:
                 generated_files.append(output_path)
-                
+
         return generated_files
-                
+
     except Exception as e:
         print(f"[AudioProcessor] Error processing {input_path}: {e}")
         return []

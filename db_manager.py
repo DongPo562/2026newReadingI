@@ -157,16 +157,16 @@ class DatabaseManager:
         """迁移：添加 Leitner 盒子系统所需的字段"""
         if not self.connection:
             self.connect()
-        
+
         from datetime import date
         today = date.today().isoformat()
-        
+
         migrations = [
             ("box_level", "INTEGER DEFAULT 1"),
             ("next_review_date", "DATE"),
             ("last_review_date", "DATE")
         ]
-        
+
         for field_name, field_type in migrations:
             try:
                 self.connection.execute(f"ALTER TABLE recordings ADD COLUMN {field_name} {field_type}")
@@ -176,7 +176,7 @@ class DatabaseManager:
                     print(f"[Migration] Column already exists: {field_name}")
                 else:
                     raise
-        
+
         # 为现有记录设置初始值
         try:
             cursor = self.connection.cursor()
@@ -228,20 +228,20 @@ class DatabaseManager:
             from text_processor import is_valid_word
             today = date.today().isoformat()
             cursor = self.connection.cursor()
-            
+
             # 待复习数量（仅合法单词）
             cursor.execute(
                 "SELECT content FROM recordings WHERE next_review_date <= ?",
                 (today,)
             )
             pending = sum(1 for row in cursor.fetchall() if is_valid_word(row['content']))
-            
+
             # 今日已完成数量（仅合法单词）
             cursor.execute(
                 "SELECT content FROM recordings WHERE last_review_date = ?",
                 (today,)
             )
             completed = sum(1 for row in cursor.fetchall() if is_valid_word(row['content']))
-            
+
             return {'pending': pending, 'completed': completed}
         return self._execute_with_retry(operation)

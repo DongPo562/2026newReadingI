@@ -39,11 +39,11 @@ class MainApp:
         self.mouse_down_pos = None
         self.mouse_down_time = 0
         self.last_recorded_text = None
-        
+
         self.current_recorder = None
         self.processing_thread = None
         self.stop_processing_flag = False
-        
+
         print("[App] Initialized. Listening for events...")    def stop_current_tasks(self):
         """
         Stops any running recording or processing.
@@ -54,7 +54,7 @@ class MainApp:
             self.current_recorder.stop()
             self.current_recorder.join(timeout=1.0) # Wait a bit
             self.current_recorder = None
-            
+
         # Signal processing thread to stop (if we could)
         self.stop_processing_flag = True    def on_click(self, x, y, button, pressed):
         if button != mouse.Button.left:
@@ -76,7 +76,7 @@ class MainApp:
                 if dist > 5:
                     is_trigger = True
                     trigger_type = "Drag"
-            
+
             # Check Double Click (if not drag)
             if not is_trigger:
                 # Simple double click detection: 
@@ -84,9 +84,9 @@ class MainApp:
                 if (current_time - self.last_click_time) < 0.5:
                     is_trigger = True
                     trigger_type = "Double Click"
-            
+
             self.last_click_time = current_time
-            
+
             if is_trigger:
                 print(f"[Trigger] {trigger_type} detected.")
                 self.handle_trigger()
@@ -94,7 +94,7 @@ class MainApp:
     def handle_trigger(self):
         # Stop existing
         self.stop_current_tasks()
-        
+
         # Start new processing in a thread
         self.stop_processing_flag = False
         self.processing_thread = threading.Thread(target=self.run_process_flow)
@@ -103,25 +103,25 @@ class MainApp:
         # This takes ~0.6s. 
         # Check flag occasionally?
         if self.stop_processing_flag: return
-        
+
         try:
             # capture_selection handles backup -> Ctrl+C -> get -> restore
             new_content = capture_selection()
         except Exception as e:
             print(f"[App] Clipboard error: {e}")
             return
-            
+
         if self.stop_processing_flag: return
 
         # 2. Validation & Cleaning
         is_valid, chosen_words = process_text(new_content, self.last_recorded_text)
-        
+
         if not is_valid:
             # If invalid, we just stop.
             return
-            
+
         self.last_recorded_text = chosen_words
-        
+
         if self.stop_processing_flag: return
 
         # Stop Playback before recording

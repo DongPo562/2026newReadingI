@@ -269,14 +269,7 @@ class Config:
     def db_retry_count(self):
         return self.config.getint('Database', 'retry_count', fallback=3)
 
-    @property
-    def review_window_width(self):
-        return self.config.getint('ReviewWindow', 'window_width', fallback=240)
-
-    @property
-    def review_window_height(self):
-        return self.config.getint('ReviewWindow', 'window_height', fallback=140)
-
+    # ==================== ReviewWindow 基础配置 ====================
     @property
     def review_opacity(self):
         return self.config.getfloat('ReviewWindow', 'opacity', fallback=0.95)
@@ -311,6 +304,7 @@ class Config:
             self.config.set('ReviewWindow', 'last_position_y', str(value[1]))
             self.save()
 
+    # ==================== ReviewWindow.Layout 布局配置 ====================
     @property
     def review_window_width(self) -> int:
         return self.config.getint('ReviewWindow.Layout', 'window_width', fallback=240)
@@ -383,7 +377,7 @@ class Config:
     def review_auto_play_delay(self) -> float:
         return self.config.getfloat('ReviewWindow', 'auto_play_delay', fallback=1.0)
 
-    # ==================== 阶段四：Leitner 盒子间隔配置 ====================
+    # ==================== Leitner 盒子间隔配置 ====================
     @property
     def review_box_1_interval(self) -> int:
         return self.config.getint('ReviewWindow', 'box_1_interval', fallback=1)
