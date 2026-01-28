@@ -4,7 +4,6 @@ import time
 import logging
 from config_loader import app_config
 
-
 class DatabaseManager:
     def __init__(self):
         self.db_path = app_config.db_path

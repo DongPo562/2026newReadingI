@@ -2,7 +2,6 @@
 review_window.py - Leitner复习窗口
 包含: ReviewWindow, ReviewToggleSwitch
 """
-
 import os
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QStyleOption, QStyle)
@@ -13,7 +12,6 @@ from config_loader import app_config
 from style_manager import StyleManager
 from widgets import ToggleSwitch
 from text_processor import is_valid_word
-
 
 class ReviewToggleSwitch(ToggleSwitch):
     def paintEvent(self, event):
@@ -27,7 +25,6 @@ class ReviewToggleSwitch(ToggleSwitch):
         p.setBrush(QColor(colors['knob']))
         p.drawEllipse(QPoint(int(self._thumb_pos + self._thumb_radius), int(self.height() / 2)),
             self._thumb_radius, self._thumb_radius)
-
 
 class ReviewWindow(QWidget):
     def __init__(self, db_manager, parent=None):
@@ -312,3 +309,34 @@ class ReviewWindow(QWidget):
         except Exception as e:
             print(f"[ReviewWindow] 加载单词失败: {e}")
             return []
+
+    def on_recording_deleted(self, deleted_number):
+        """当主界面删除录音时调用，刷新复习列表"""
+        # 检查当前显示的单词是否被删除
+        current_word_deleted = False
+        if self.current_index < len(self.words):
+            current_word = self.words[self.current_index]
+            if current_word.get('number') == deleted_number:
+                current_word_deleted = True
+                self._stop_playback()
+        # 重新加载待复习列表
+        self.words = self._load_words_to_review()
+        # 调整当前索引
+        if current_word_deleted:
+            # 当前单词被删除，保持索引不变（自动显示下一个）
+            if self.current_index >= len(self.words):
+                self.current_index = max(0, len(self.words) - 1)
+        else:
+            # 当前单词未被删除，需要找到它的新位置
+            if self.current_index < len(self.words):
+                pass  # 保持当前索引
+            else:
+                self.current_index = max(0, len(self.words) - 1)
+        # 重新启用按钮（如果有单词可复习）
+        if self.words:
+            self.btn_play.setEnabled(True)
+            self.btn_remember.setEnabled(True)
+            self.btn_forget.setEnabled(True)
+        # 更新显示
+        self.update_content()
+        print(f"[ReviewWindow] 录音 {deleted_number} 已删除，列表已刷新")

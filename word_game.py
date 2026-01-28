@@ -10,7 +10,6 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
 from PyQt6.QtCore import Qt, QRect, QPoint, QSize, QPropertyAnimation, pyqtProperty, QTimer
 from config_loader import app_config
 
-
 class FlowLayout(QLayout):
     def __init__(self, parent=None, margin=0, spacing=-1):
         super().__init__(parent)
@@ -83,7 +82,6 @@ class FlowLayout(QLayout):
             line_height = max(line_height, item.sizeHint().height())
         return y + line_height - rect.y()
 
-
 class WordGameWindow(QWidget):
     def __init__(self, full_text, parent=None):
         super().__init__(parent)
@@ -96,7 +94,7 @@ class WordGameWindow(QWidget):
         self.start_game()
 
     def tokenize(self, text):
-        pattern = r"(\w+'\w+|[\$]?\d+%?|\w+|-|[^\w\s])"
+        pattern = r"(\w+'\w+|[$]?\d+%?|\w+|-|[^\w\s])"
         raw_tokens = re.findall(pattern, text)
         return [t for t in raw_tokens if t.strip()]
 

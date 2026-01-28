@@ -1,11 +1,9 @@
 import re
 
-
 def clean_text(text):
     pattern = r"[^\x00-\x7F]+"
     cleaned = re.sub(pattern, "", text)
     return cleaned
-
 
 def validate_text(text, last_text=None):
     if not text:
@@ -13,7 +11,6 @@ def validate_text(text, last_text=None):
     if len(text) > 600:
         return False, f"Length {len(text)} > 600"
     return True, "Valid"
-
 
 def process_text(text, last_text=None):
     is_valid, msg = validate_text(text, last_text)
@@ -26,7 +23,6 @@ def process_text(text, last_text=None):
         return False, None
     print(f"[Text] ChosenWords: {chosenWords}")
     return True, chosenWords
-
 
 # ==================== 阶段四：单词识别函数 ====================
 def is_valid_word(text):

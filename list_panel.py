@@ -312,6 +312,7 @@ class AudioListItem(QWidget):
     def delete_item(self):
         if self.player.is_playing(self.number):
             self.player.stop()
+        deleted_number = self.number  # 保存被删除的 number
         try:
             self.list_panel.db_manager.delete_recording(self.number)
             print(f"[Delete] removed record number={self.number}")
@@ -329,12 +330,15 @@ class AudioListItem(QWidget):
                 except Exception as e:
                     print(f"[Delete] Warning: failed to delete file {os.path.basename(fpath)}, reason: {e}")
             self.list_panel.refresh_list(force_ui_update=True)
+            # 阶段六：发射删除信号通知复习窗口
+            self.list_panel.recording_deleted.emit(deleted_number)
         except Exception as e:
             print(f"[Delete] Error: {e}")
 
 
 class ListPanel(QWidget):
     game_requested = pyqtSignal(str)
+    recording_deleted = pyqtSignal(int)  # 阶段六：录音删除信号，传递被删除的 number
 
     def __init__(self, player, ball_widget, db_manager):
         super().__init__()
@@ -456,6 +460,8 @@ class ListPanel(QWidget):
     def open_review_window(self):
         if not self.review_window:
             self.review_window = ReviewWindow(self.db_manager)
+            # 阶段六：连接删除信号到复习窗口的刷新槽
+            self.recording_deleted.connect(self.review_window.on_recording_deleted)
         self.review_window.show()
         self.review_window.raise_()
         self.review_window.activateWindow()

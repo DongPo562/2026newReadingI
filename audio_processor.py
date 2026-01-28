@@ -2,7 +2,6 @@ import os
 import subprocess
 import shutil
 
-
 def generate_slow_audio(input_path, speeds=[0.5, 0.75]):
     """
     Generates slow versions of the input audio file using FFmpeg.
@@ -84,7 +83,6 @@ def generate_slow_audio(input_path, speeds=[0.5, 0.75]):
     except Exception as e:
         print(f"[AudioProcessor] Error processing {input_path}: {e}")
         return []
-
 
 if __name__ == "__main__":
     # Test

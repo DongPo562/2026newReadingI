@@ -8,7 +8,6 @@ from PyQt6.QtCore import Qt, QPoint, QPropertyAnimation, QEasingCurve, pyqtSigna
 from PyQt6.QtGui import QPainter, QColor
 from config_loader import app_config
 
-
 class ToggleSwitch(QWidget):
     toggled = pyqtSignal(bool)
 
@@ -64,7 +63,6 @@ class ToggleSwitch(QWidget):
         p.setBrush(QColor("white"))
         p.drawEllipse(QPoint(int(self._thumb_pos + self._thumb_radius), int(self.height() / 2)), 
             self._thumb_radius, self._thumb_radius)
-
 
 class ClickableLabel(QLabel):
     clicked = pyqtSignal()

@@ -9,7 +9,6 @@ from clipboard_manager import capture_selection
 from text_processor import process_text
 from audio_recorder import AudioRecorder
 
-
 class ExitServer(threading.Thread):
     def __init__(self, app_instance):
         super().__init__()
@@ -33,7 +32,6 @@ class ExitServer(threading.Thread):
                         break
         except Exception as e:
             print(f"[ExitServer] Error: {e}")
-
 
 class MainApp:
     def __init__(self):
@@ -165,7 +163,6 @@ class MainApp:
         self.listener = mouse.Listener(on_click=self.on_click)
         self.listener.start()
         self.listener.join()
-
 
 if __name__ == "__main__":
     app = MainApp()
