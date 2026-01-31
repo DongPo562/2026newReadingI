@@ -406,6 +406,15 @@ class Config:
     def review_max_word_length(self) -> int:
         return self.config.getint('ReviewWindow', 'max_word_length', fallback=35)
 
+    @property
+    def review_hover_modifier_key(self) -> str:
+        """悬浮单词区时模拟按下的修饰键，可选值: alt, ctrl, shift"""
+        return self.config.get('ReviewWindow', 'hover_modifier_key', fallback='ctrl').lower()
+    @property
+    def review_loop_interval_ms(self) -> int:
+        """循环播放时每次播放之间的间隔时间（毫秒）"""
+        return self.config.getint('ReviewWindow', 'loop_interval_ms', fallback=500)
+
     def get_box_interval(self, box_level):
         """根据盒子等级获取间隔天数"""
         intervals = {

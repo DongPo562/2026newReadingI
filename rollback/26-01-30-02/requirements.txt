@@ -1,0 +1,7 @@
+pynput
+pyperclip
+soundcard
+soundfile
+numpy
+pywin32
+PyQt6
