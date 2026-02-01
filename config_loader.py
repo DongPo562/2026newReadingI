@@ -1,6 +1,7 @@
 import configparser
 import os
 
+
 class Config:
     def __init__(self, config_path='config.ini'):
         self.config_path = config_path
@@ -269,6 +270,52 @@ class Config:
     def db_retry_count(self):
         return self.config.getint('Database', 'retry_count', fallback=3)
 
+    # ==================== AltTrigger 配置 ====================
+    @property
+    def alt_trigger_key(self) -> str:
+        """触发键，可选值: alt, ctrl, shift"""
+        return self.config.get('AltTrigger', 'trigger_key', fallback='alt').lower()
+
+    @property
+    def alt_triple_click_interval(self) -> float:
+        """三击之间的间隔时间（秒）"""
+        return self.config.getfloat('AltTrigger', 'triple_click_interval', fallback=0.05)
+
+    @property
+    def alt_wait_after_triple_click(self) -> float:
+        """三击后等待时间（秒），等待文本选中完成"""
+        return self.config.getfloat('AltTrigger', 'wait_after_triple_click', fallback=0.15)
+
+    @property
+    def alt_debounce_interval(self) -> float:
+        """触发键防抖动间隔（秒）"""
+        return self.config.getfloat('AltTrigger', 'debounce_interval', fallback=0.5)
+    @property
+    def alt_play_count(self) -> int:
+        """Alt 键触发匹配成功后的播放次数"""
+        return self.config.getint('AltTrigger', 'play_count', fallback=1)
+
+    # ==================== AutoRecord 自动补录配置 ====================
+    @property
+    def auto_record_wait_for_toolbar(self) -> float:
+        """悬浮横条出现等待时间（秒）"""
+        return self.config.getfloat('AutoRecord', 'wait_for_toolbar', fallback=0.5)
+    @property
+    def auto_record_ocr_search_offset_y(self) -> int:
+        """OCR 搜索区域上方偏移（像素）"""
+        return self.config.getint('AutoRecord', 'ocr_search_offset_y', fallback=80)
+    @property
+    def auto_record_ocr_search_width(self) -> int:
+        """OCR 搜索区域宽度（像素）"""
+        return self.config.getint('AutoRecord', 'ocr_search_width', fallback=320)
+    @property
+    def auto_record_follow_main_autoplay(self) -> bool:
+        """
+        自动补录完成后是否跟随主界面的自动播放设置
+        Returns:
+            bool: True = 跟随主界面设置, False = 强制不播放
+        """
+        return self.config.getboolean('AutoRecord', 'follow_main_autoplay', fallback=False)
     # ==================== ReviewWindow 基础配置 ====================
     @property
     def review_opacity(self):
@@ -410,6 +457,7 @@ class Config:
     def review_hover_modifier_key(self) -> str:
         """悬浮单词区时模拟按下的修饰键，可选值: alt, ctrl, shift"""
         return self.config.get('ReviewWindow', 'hover_modifier_key', fallback='ctrl').lower()
+
     @property
     def review_loop_interval_ms(self) -> int:
         """循环播放时每次播放之间的间隔时间（毫秒）"""
@@ -425,6 +473,25 @@ class Config:
             5: self.review_box_5_interval,
         }
         return intervals.get(box_level, 14)
+    # ==================== CtrlTrigger 配置 ====================
+    @property
+    def ctrl_trigger_enabled(self) -> bool:
+        """是否启用 Ctrl 长按录音功能"""
+        return self.config.getboolean('CtrlTrigger', 'enabled', fallback=True)
+    @property
+    def ctrl_trigger_hold_duration(self) -> float:
+        """Ctrl 键长按触发阈值（秒）"""
+        return self.config.getfloat('CtrlTrigger', 'hold_duration', fallback=1.5)
+
+    @property
+    def ctrl_trigger_sound_detect_timeout(self) -> float:
+        """等待系统声音的超时时间（秒）"""
+        return self.config.getfloat('CtrlTrigger', 'sound_detect_timeout', fallback=2.0)
+    @property
+    def ctrl_trigger_duplicate_play_delay(self) -> float:
+        """重复文本时，系统声音结束后延迟播放已有录音的时间（秒）"""
+        return self.config.getfloat('CtrlTrigger', 'duplicate_play_delay', fallback=0.1)
+
 
 try:
     current_dir = os.path.dirname(os.path.abspath(__file__))
