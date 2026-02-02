@@ -83,6 +83,31 @@ def point_in_rect(px, py, x, y, w, h):
     return x <= px <= x + w and y <= py <= y + h
 
 
+def get_loopback_mic():
+    """获取当前默认输出设备的 Loopback（与 audio_recorder.py 保持一致）"""
+    import soundcard as sc
+    try:
+        default_speaker = sc.default_speaker()
+        print(f"[CtrlTrigger] Default Speaker: {default_speaker.name}")
+        
+        all_mics = sc.all_microphones(include_loopback=True)
+        physical_mics_ids = [m.id for m in sc.all_microphones(include_loopback=False)]
+        loopback_candidates = [m for m in all_mics if m.id not in physical_mics_ids]
+        
+        for mic in loopback_candidates:
+            if mic.name == default_speaker.name:
+                print(f"[CtrlTrigger] Found matching loopback: {mic.name}")
+                return mic
+        
+        # 回退方案
+        fallback = sc.get_microphone(id=str(default_speaker.name), include_loopback=True)
+        print(f"[CtrlTrigger] Using fallback loopback: {fallback.name}")
+        return fallback
+    except Exception as e:
+        print(f"[CtrlTrigger] Error finding loopback: {e}")
+        return None
+
+
 def get_word_at_cursor():
     """
     使用 winocr 获取鼠标位置的单词
@@ -466,17 +491,17 @@ class CtrlTriggerListener:
         Returns:
             bool: 是否检测到声音（False 也可能表示被取消）
         """
-        import soundcard as sc
         import numpy as np
         
         start_time = time.time()
         silence_threshold = app_config.silence_threshold_db
         
         try:
-            # 获取默认扬声器的回环设备
-            speakers = sc.all_speakers()
-            default_speaker = sc.default_speaker()
-            loopback = sc.get_microphone(id=str(default_speaker.name), include_loopback=True)
+            # 使用统一的 loopback 获取方法
+            loopback = get_loopback_mic()
+            if not loopback:
+                print("[CtrlTrigger] Failed to get loopback device")
+                return False
             
             with loopback.recorder(samplerate=44100, channels=2) as recorder:
                 while time.time() - start_time < self.sound_detect_timeout:
@@ -508,7 +533,6 @@ class CtrlTriggerListener:
         Returns:
             bool: True 表示正常结束，False 表示被取消
         """
-        import soundcard as sc
         import numpy as np
         
         silence_threshold = app_config.silence_threshold_db
@@ -516,8 +540,11 @@ class CtrlTriggerListener:
         silence_start = None
         
         try:
-            default_speaker = sc.default_speaker()
-            loopback = sc.get_microphone(id=str(default_speaker.name), include_loopback=True)
+            # 使用统一的 loopback 获取方法
+            loopback = get_loopback_mic()
+            if not loopback:
+                print("[CtrlTrigger] Failed to get loopback device")
+                return False
             
             with loopback.recorder(samplerate=44100, channels=2) as recorder:
                 while True:

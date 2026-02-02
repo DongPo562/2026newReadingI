@@ -7,3 +7,5 @@ text/
 *.db
 *.db-shm
 *.db-wal
+rollback/
+
