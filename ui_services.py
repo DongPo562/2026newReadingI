@@ -10,7 +10,6 @@ from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtMultimedia import QMediaPlayer
 from config_loader import app_config
 
-
 class CommandServer(QThread):
     file_saved_signal = pyqtSignal(str)
     stop_playback_signal = pyqtSignal()
@@ -50,7 +49,6 @@ class CommandServer(QThread):
                     print(f"Socket Accept Error: {e}")
         except Exception as e:
             print(f"Socket Bind Error: {e}")
-
 
 class ConsistencyChecker(QThread):
     finished = pyqtSignal()
@@ -102,6 +100,7 @@ class ConsistencyChecker(QThread):
                     print(f"Consistency check warning: failed to remove file {fname}, reason: {e}")
             print(f"Consistency check completed, removed {removed_records} records and {removed_files} files")
             try:
+
                 project_root = os.path.dirname(os.path.abspath(__file__))
                 text_dir = os.path.join(project_root, 'text')
                 if os.path.exists(text_dir):
@@ -124,7 +123,6 @@ class ConsistencyChecker(QThread):
         for fpath in files_to_delete:
             if os.path.exists(fpath):
                 os.remove(fpath)
-
 
 class FileCleaner(QThread):
     def __init__(self, db_manager, list_panel):

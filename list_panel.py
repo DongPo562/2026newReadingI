@@ -14,7 +14,6 @@ from widgets import ToggleSwitch, ClickableLabel
 from ui_services import FileCleaner
 from review_window import ReviewWindow
 
-
 class DateFilterComboBox(QComboBox):
     def __init__(self, list_panel, parent=None):
         super().__init__(parent)
@@ -36,7 +35,6 @@ class DateFilterComboBox(QComboBox):
         if not self.list_panel.geometry().contains(cursor_pos) and \
             not self.list_panel.ball_widget.geometry().contains(cursor_pos):
                 self.list_panel.ball_widget.collapse_panel()
-
 
 class ModeSelector(QWidget):
     interaction = pyqtSignal()
@@ -132,7 +130,6 @@ class ModeSelector(QWidget):
             self.loop_lbl.setEnabled(True)
             self.loop_lbl.setStyleSheet("color: white; border: none; font-weight: bold;")
         self.loop_lbl.setText(f"x{app_config.play_mode2_loop_count}")
-
 
 class AudioListItem(QWidget):
     play_requested = pyqtSignal(int)
@@ -334,7 +331,6 @@ class AudioListItem(QWidget):
         except Exception as e:
             print(f"[Delete] Error: {e}")
 
-
 class ListPanel(QWidget):
     game_requested = pyqtSignal(str)
     recording_deleted = pyqtSignal(int)  # 阶段六：录音删除信号，传递被删除的 number
@@ -412,6 +408,7 @@ class ListPanel(QWidget):
                 color: white;
                 border-radius: 4px;
                 border: none;
+
                 font-size: 12px;
                 margin-left: 10px;
             }
@@ -522,6 +519,7 @@ class ListPanel(QWidget):
             if not recordings:
                 lbl = QLabel(app_config.empty_list_hint_text)
                 lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
                 lbl.setStyleSheet(f"color: {app_config.empty_list_hint_color}; font-size: {app_config.ui_font_size}px;")
                 self.scroll_layout.insertStretch(0)
                 self.scroll_layout.insertWidget(1, lbl)
@@ -537,7 +535,7 @@ class ListPanel(QWidget):
     def on_silent_record_start(self):
         """
         处理静默录音模式开始信号
-        
+
         当自动补录触发时调用，根据配置决定是否进入静默模式（不自动播放）
         """
         if not app_config.auto_record_follow_main_autoplay:

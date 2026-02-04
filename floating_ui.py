@@ -18,7 +18,6 @@ from ui_services import CommandServer, ConsistencyChecker
 from list_panel import ListPanel
 from word_game import WordGameWindow
 
-
 class FloatingBall(QWidget):
     def __init__(self):
         super().__init__()
@@ -193,7 +192,6 @@ class FloatingBall(QWidget):
             target_y = ball_geo.y() + self.diameter - target_height
             self.panel.move(target_x, target_y)
             self.raise_()
-
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

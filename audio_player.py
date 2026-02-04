@@ -7,7 +7,6 @@ from PyQt6.QtCore import QObject, QUrl, QTimer, pyqtSignal
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput, QMediaDevices
 from config_loader import app_config
 
-
 class AudioPlayer(QObject):
     state_changed = pyqtSignal(QMediaPlayer.PlaybackState)
 

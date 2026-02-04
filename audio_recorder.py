@@ -12,12 +12,11 @@ from db_manager import DatabaseManager
 from audio_processor import generate_slow_audio
 from text_processor import is_valid_word, extract_letter_sequence
 
-
 class AudioRecorder(threading.Thread):
     def __init__(self, content, start_silence_duration=None):
         """
         初始化录音器
-        
+
         Args:
             content: 录音对应的文本内容
             start_silence_duration: 等待声音开始的超时时间（秒），
@@ -96,6 +95,7 @@ class AudioRecorder(threading.Thread):
                         if db < self.silence_threshold_db:
                             if self.silence_start_time is None:
                                 self.silence_start_time = current_time
+
                             elif (current_time - self.silence_start_time) >= self.end_silence_duration:
                                 print("[Recorder] End silence detected.")
                                 break

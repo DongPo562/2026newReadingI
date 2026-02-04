@@ -270,6 +270,22 @@ class Config:
     def db_retry_count(self):
         return self.config.getint('Database', 'retry_count', fallback=3)
 
+    # ==================== ClickTrigger 配置 ====================
+    @property
+    def click_double_click_threshold(self) -> float:
+        """双击间隔阈值（秒），两次点击间隔小于此值视为连续点击"""
+        return self.config.getfloat('ClickTrigger', 'double_click_threshold', fallback=0.5)
+
+    @property
+    def click_multi_click_wait(self) -> float:
+        """多击等待时间（秒），检测到双击后等待更多点击的时间窗口"""
+        return self.config.getfloat('ClickTrigger', 'multi_click_wait', fallback=0.25)
+
+    @property
+    def click_drag_distance_threshold(self) -> int:
+        """拖拽距离阈值（像素），鼠标移动超过此距离视为拖拽"""
+        return self.config.getint('ClickTrigger', 'drag_distance_threshold', fallback=5)
+
     # ==================== AltTrigger 配置 ====================
     @property
     def alt_trigger_key(self) -> str:
@@ -290,6 +306,7 @@ class Config:
     def alt_debounce_interval(self) -> float:
         """触发键防抖动间隔（秒）"""
         return self.config.getfloat('AltTrigger', 'debounce_interval', fallback=0.5)
+
     @property
     def alt_play_count(self) -> int:
         """Alt 键触发匹配成功后的播放次数"""
@@ -300,14 +317,17 @@ class Config:
     def auto_record_wait_for_toolbar(self) -> float:
         """悬浮横条出现等待时间（秒）"""
         return self.config.getfloat('AutoRecord', 'wait_for_toolbar', fallback=0.5)
+
     @property
     def auto_record_ocr_search_offset_y(self) -> int:
         """OCR 搜索区域上方偏移（像素）"""
         return self.config.getint('AutoRecord', 'ocr_search_offset_y', fallback=80)
+
     @property
     def auto_record_ocr_search_width(self) -> int:
         """OCR 搜索区域宽度（像素）"""
         return self.config.getint('AutoRecord', 'ocr_search_width', fallback=320)
+
     @property
     def auto_record_follow_main_autoplay(self) -> bool:
         """
@@ -316,6 +336,7 @@ class Config:
             bool: True = 跟随主界面设置, False = 强制不播放
         """
         return self.config.getboolean('AutoRecord', 'follow_main_autoplay', fallback=False)
+
     # ==================== ReviewWindow 基础配置 ====================
     @property
     def review_opacity(self):
@@ -473,11 +494,13 @@ class Config:
             5: self.review_box_5_interval,
         }
         return intervals.get(box_level, 14)
+
     # ==================== CtrlTrigger 配置 ====================
     @property
     def ctrl_trigger_enabled(self) -> bool:
         """是否启用 Ctrl 长按录音功能"""
         return self.config.getboolean('CtrlTrigger', 'enabled', fallback=True)
+
     @property
     def ctrl_trigger_hold_duration(self) -> float:
         """Ctrl 键长按触发阈值（秒）"""
@@ -487,6 +510,7 @@ class Config:
     def ctrl_trigger_sound_detect_timeout(self) -> float:
         """等待系统声音的超时时间（秒）"""
         return self.config.getfloat('CtrlTrigger', 'sound_detect_timeout', fallback=2.0)
+
     @property
     def ctrl_trigger_duplicate_play_delay(self) -> float:
         """重复文本时，系统声音结束后延迟播放已有录音的时间（秒）"""

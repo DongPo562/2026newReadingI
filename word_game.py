@@ -13,10 +13,9 @@ from PyQt6.QtCore import (Qt, QRect, QPoint, QSize, QPropertyAnimation,
 from PyQt6.QtGui import QCursor
 from config_loader import app_config
 
-
 class FlowLayout(QLayout):
     """自适应流式布局，用于单词按钮排列"""
-    
+
     def __init__(self, parent=None, margin=0, spacing=-1):
         super().__init__(parent)
         if parent is not None:
@@ -96,10 +95,9 @@ class FlowLayout(QLayout):
             line_height = max(line_height, item.sizeHint().height())
         return y + line_height - rect.y()
 
-
 class WordGameWindow(QWidget):
     """单词还原句子游戏窗口 - 优化版"""
-    
+
     # 样式常量
     STYLES = {
         'container': """
@@ -248,26 +246,26 @@ class WordGameWindow(QWidget):
         super().__init__(parent)
         self.full_text = full_text
         self.tokens = self.tokenize(full_text)
-        
+
         # 分类 token
         self.word_tokens = []        # [(token, original_index), ...] 可选单词
         self.fixed_positions = {}    # {original_index: token} 固定项（标点/数字）
         self.classify_tokens()
-        
+
         # 游戏状态
         self.source_words = []       # 待选区的单词 [(token, original_index), ...]
         self.selected_words = []     # 已选区的单词 [(token, original_index), ...]
-        
+
         # 拖动支持
         self._drag_pos = None
-        
+
         self.init_ui()
         self.start_game()
 
     def tokenize(self, text):
         """将文本分词为 token 列表"""
-        # 改进的正则：匹配单词（含缩写）、带符号的数字、单独标点
-        pattern = r"(\w+'\w+|\$?\d+\.?\d*%?|\w+|[^\w\s])"
+        # 使用更稳健的正则，避免转义问题
+        pattern = r"(\w+'\w+|\w+|[^\w\s])"
         raw_tokens = re.findall(pattern, text)
         return [t for t in raw_tokens if t.strip()]
 
@@ -279,7 +277,7 @@ class WordGameWindow(QWidget):
         """将 token 分类为可选词和固定项"""
         self.word_tokens = []
         self.fixed_positions = {}
-        
+
         for i, token in enumerate(self.tokens):
             if self.is_word_token(token):
                 self.word_tokens.append((token, i))
@@ -293,11 +291,11 @@ class WordGameWindow(QWidget):
             self.show_feedback(False, "句子太短，无法进行游戏")
             QTimer.singleShot(1500, self.close)
             return
-        
+
         # 打乱单词顺序（确保与原顺序不同）
         shuffled_words = self.word_tokens.copy()
         n = len(shuffled_words)
-        
+
         if n > 1:
             max_attempts = 100
             for _ in range(max_attempts):
@@ -308,7 +306,7 @@ class WordGameWindow(QWidget):
             else:
                 # 如果随机打乱后仍然相同，手动调整
                 shuffled_words = shuffled_words[1:] + shuffled_words[:1]
-        
+
         self.source_words = shuffled_words
         self.selected_words = []
         self.refresh_ui()
@@ -321,15 +319,15 @@ class WordGameWindow(QWidget):
             Qt.WindowType.WindowStaysOnTopHint
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        
+
         # 使用配置中的窗口尺寸（建议 550x650）
         width = getattr(app_config, 'game_window_width', 550)
         height = getattr(app_config, 'game_window_height', 650)
         self.setFixedSize(width, height)
-        
+
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(12, 12, 12, 12)
-        
+
         # 主容器
         self.container = QFrame()
         self.container.setStyleSheet(self.STYLES['container'])
@@ -340,16 +338,16 @@ class WordGameWindow(QWidget):
         # === 标题栏 ===
         header_layout = QHBoxLayout()
         header_layout.setContentsMargins(0, 0, 0, 0)
-        
+
         title = QLabel("单词还原句子游戏")
         title.setStyleSheet(self.STYLES['title'])
-        
+
         close_btn = QPushButton("×")
         close_btn.setFixedSize(30, 30)
         close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         close_btn.setStyleSheet(self.STYLES['close_btn'])
         close_btn.clicked.connect(self.close)
-        
+
         header_layout.addWidget(title)
         header_layout.addStretch()
         header_layout.addWidget(close_btn)
@@ -365,11 +363,11 @@ class WordGameWindow(QWidget):
         source_header.addStretch()
         source_header.addWidget(self.progress_label)
         container_layout.addLayout(source_header)
-        
+
         self.source_area = QWidget()
         self.source_area.setStyleSheet(self.STYLES['area_widget'])
         self.source_layout = FlowLayout(self.source_area, margin=12, spacing=10)
-        
+
         scroll_source = QScrollArea()
         scroll_source.setWidget(self.source_area)
         scroll_source.setWidgetResizable(True)
@@ -381,11 +379,11 @@ class WordGameWindow(QWidget):
         lbl_target = QLabel("已选区")
         lbl_target.setStyleSheet(self.STYLES['section_label'])
         container_layout.addWidget(lbl_target)
-        
+
         self.target_area = QWidget()
         self.target_area.setStyleSheet(self.STYLES['area_widget'])
         self.target_layout = FlowLayout(self.target_area, margin=12, spacing=10)
-        
+
         scroll_target = QScrollArea()
         scroll_target.setWidget(self.target_area)
         scroll_target.setWidgetResizable(True)
@@ -396,23 +394,23 @@ class WordGameWindow(QWidget):
         # === 操作按钮 ===
         btn_layout = QHBoxLayout()
         btn_layout.setContentsMargins(0, 8, 0, 0)
-        
+
         self.reset_btn = QPushButton("重置")
         self.reset_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.reset_btn.setStyleSheet(self.STYLES['reset_btn'])
         self.reset_btn.clicked.connect(self.start_game)
-        
+
         self.confirm_btn = QPushButton("确认")
         self.confirm_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.confirm_btn.setStyleSheet(self.STYLES['confirm_btn'])
         self.confirm_btn.clicked.connect(self.check_result)
-        
+
         btn_layout.addStretch()
         btn_layout.addWidget(self.reset_btn)
         btn_layout.addSpacing(16)
         btn_layout.addWidget(self.confirm_btn)
         container_layout.addLayout(btn_layout)
-        
+
         main_layout.addWidget(self.container)
 
         # 居中显示
@@ -449,20 +447,20 @@ class WordGameWindow(QWidget):
         """刷新 UI 显示"""
         self.clear_layout(self.source_layout)
         self.clear_layout(self.target_layout)
-        
+
         # 更新进度显示
         total_words = len(self.word_tokens)
         selected_count = len(self.selected_words)
         self.progress_label.setText(f"已选 {selected_count}/{total_words} 个单词")
-        
+
         # === 待选区：只显示剩余的可选单词 ===
         for idx, (txt, orig_idx) in enumerate(self.source_words):
             btn = self.create_word_btn(txt, idx, True)
             self.source_layout.addWidget(btn)
-        
+
         # === 已选区：按原句位置显示，包含固定项和占位符 ===
         self.build_target_area()
-        
+
         # 强制更新布局
         self.source_area.adjustSize()
         self.target_area.adjustSize()
@@ -471,7 +469,7 @@ class WordGameWindow(QWidget):
         """构建已选区显示（包含固定项和占位符）"""
         total_positions = len(self.tokens)
         word_index = 0  # 跟踪已选单词的索引
-        
+
         for pos in range(total_positions):
             if pos in self.fixed_positions:
                 # 固定项（标点/数字）
@@ -509,24 +507,24 @@ class WordGameWindow(QWidget):
             if list_index < len(self.selected_words):
                 item = self.selected_words.pop(list_index)
                 self.source_words.append(item)
-        
+
         self.refresh_ui()
 
     def check_result(self):
         """检查答案是否正确"""
         total_words = len(self.word_tokens)
-        
+
         if len(self.selected_words) != total_words:
             remaining = total_words - len(self.selected_words)
             self.show_feedback(False, f"还有 {remaining} 个单词未选择！")
             return
-        
+
         # 比对单词顺序
         user_sequence = [txt for txt, _ in self.selected_words]
         correct_sequence = [txt for txt, _ in self.word_tokens]
-        
+
         is_correct = (user_sequence == correct_sequence)
-        
+
         if is_correct:
             self.show_feedback(True, "🎉 回答正确！")
             QTimer.singleShot(1500, self.close)
@@ -536,7 +534,7 @@ class WordGameWindow(QWidget):
     def show_feedback(self, is_success, message):
         """显示反馈信息"""
         color = "#4CAF50" if is_success else "#F44336"
-        
+
         feedback = QLabel(message, self)
         feedback.setAlignment(Qt.AlignmentFlag.AlignCenter)
         feedback.setStyleSheet(f"""
@@ -548,7 +546,7 @@ class WordGameWindow(QWidget):
             font-size: 17px;
         """)
         feedback.adjustSize()
-        
+
         # 居中显示
         c_geo = self.container.geometry()
         x = c_geo.x() + (c_geo.width() - feedback.width()) // 2
@@ -556,11 +554,11 @@ class WordGameWindow(QWidget):
         feedback.move(x, y)
         feedback.show()
         feedback.raise_()
-        
+
         # 添加透明度效果
         opacity_effect = QGraphicsOpacityEffect(feedback)
         feedback.setGraphicsEffect(opacity_effect)
-        
+
         # 淡出动画
         anim = QPropertyAnimation(opacity_effect, b"opacity", self)
         anim.setDuration(1500)

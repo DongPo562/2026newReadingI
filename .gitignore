@@ -8,4 +8,4 @@ text/
 *.db-shm
 *.db-wal
 rollback/
-
+ocr_debug.png
