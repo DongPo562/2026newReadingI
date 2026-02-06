@@ -4,13 +4,22 @@ import math
 import sys
 import socket
 import os
+import ctypes
 from pynput import mouse
+from pynput.mouse import Controller as MouseController
+from pynput.keyboard import Controller as KeyboardController, Key
 from ui_automation import get_selected_text
 from text_processor import process_text
 from audio_recorder import AudioRecorder
 import alt_trigger
 import ctrl_trigger
 from config_loader import app_config as config
+
+
+def get_screen_size():
+    """获取屏幕尺寸"""
+    user32 = ctypes.windll.user32
+    return user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)
 
 
 class ExitServer(threading.Thread):
@@ -49,6 +58,7 @@ class MainApp:
         # ====== 点击判定相关 ======
         self.click_count = 0
         self.last_click_time = 0
+        self.last_click_pos = None  # 记录最后一次点击位置（用于三连击）
         self.pending_trigger_timer = None
         self.trigger_lock = threading.Lock()
 
@@ -56,6 +66,7 @@ class MainApp:
         self.double_click_threshold = config.click_double_click_threshold
         self.multi_click_wait = config.click_multi_click_wait
         self.drag_distance_threshold = config.click_drag_distance_threshold
+        self.triple_click_to_alt_enabled = config.click_triple_click_to_alt_enabled
 
         # 启动 Alt 键监听器
         self.alt_listener = alt_trigger.AltTriggerListener()
@@ -65,6 +76,12 @@ class MainApp:
         self.ctrl_listener = ctrl_trigger.CtrlTriggerListener()
         self.ctrl_listener.start()
 
+        # 键盘控制器（用于三连击后模拟按键）
+        self.keyboard_controller = KeyboardController()
+        
+        # 鼠标控制器（用于三连击后模拟点击）
+        self.mouse_controller = MouseController()
+        
         print("[App] Initialized. Listening for events...")
 
     def stop_current_tasks(self):
@@ -111,6 +128,7 @@ class MainApp:
                     self.click_count = 1
 
                 self.last_click_time = current_time
+                self.last_click_pos = (x, y)  # 记录点击位置
 
                 # 如果达到双击条件，安排延迟触发
                 if self.click_count >= 2:
@@ -138,6 +156,57 @@ class MainApp:
                 self.pending_trigger_timer = None
             self.click_count = 0
 
+    def _simulate_click_to_cancel_selection(self):
+        """
+        模拟点击以取消选中状态和关闭悬浮横条
+        
+        策略：
+        - 如果鼠标位置靠近屏幕下方（下半部分）：上移100px + 右移50px
+        - 如果鼠标位置靠近屏幕上方（上半部分）：下移100px + 右移50px
+        """
+        try:
+            # 获取当前鼠标位置
+            current_pos = self.mouse_controller.position
+            current_x, current_y = current_pos
+            
+            # 获取屏幕尺寸
+            screen_width, screen_height = get_screen_size()
+            
+            # 判断鼠标位置并计算偏移
+            if current_y > screen_height / 2:
+                # 靠近屏幕下方：上移100px + 右移50px
+                offset_x = 50
+                offset_y = -100
+                print(f"[Trigger] Mouse near bottom, clicking at offset (+{offset_x}, {offset_y})")
+            else:
+                # 靠近屏幕上方：下移100px + 右移50px
+                offset_x = 50
+                offset_y = 100
+                print(f"[Trigger] Mouse near top, clicking at offset (+{offset_x}, +{offset_y})")
+            
+            # 计算目标位置
+            target_x = current_x + offset_x
+            target_y = current_y + offset_y
+            
+            # 确保目标位置在屏幕范围内
+            target_x = max(0, min(target_x, screen_width - 1))
+            target_y = max(0, min(target_y, screen_height - 1))
+            
+            # 移动到目标位置并点击
+            self.mouse_controller.position = (target_x, target_y)
+            self.mouse_controller.click(mouse.Button.left)
+            
+            # 立即返回原位
+            self.mouse_controller.position = current_pos
+            
+            print(f"[Trigger] Clicked at ({target_x}, {target_y}), returned to ({current_x}, {current_y})")
+            
+        except Exception as e:
+            print(f"[Trigger] Error simulating click: {e}")
+            # 出错时回退到方向键方案
+            self.keyboard_controller.press(Key.right)
+            self.keyboard_controller.release(Key.right)
+
     def _execute_trigger(self):
         """执行触发（定时器回调）"""
         with self.trigger_lock:
@@ -146,8 +215,21 @@ class MainApp:
             self.pending_trigger_timer = None
 
         if click_count >= 3:
-            # 三击及以上：仅识别，不触发任何操作
-            print(f"[Trigger] triple_click detected ({click_count} clicks) - ignored.")
+            # 三击及以上：根据配置决定是否触发Alt流程
+            if not self.triple_click_to_alt_enabled:
+                print(f"[Trigger] triple_click detected ({click_count} clicks) - ignored (disabled in config).")
+                return
+            print(f"[Trigger] triple_click detected ({click_count} clicks) - simulating click + Alt.")
+            
+            # 1. 模拟点击空白处：取消选中状态并关闭TTS悬浮横条
+            self._simulate_click_to_cancel_selection()
+            
+            # 2. 短暂延迟确保点击生效
+            time.sleep(0.05)
+            
+            # 3. 模拟Alt键：触发alt_trigger流程（会重新三击选中文本）
+            self.keyboard_controller.press(Key.alt_l)
+            self.keyboard_controller.release(Key.alt_l)
         elif click_count == 2:
             # 双击：触发录音流程
             print("[Trigger] double_click detected.")

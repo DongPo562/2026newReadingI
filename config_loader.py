@@ -272,6 +272,10 @@ class Config:
 
     # ==================== ClickTrigger 配置 ====================
     @property
+    def click_triple_click_to_alt_enabled(self) -> bool:
+        """是否启用三连击触发Alt流程功能"""
+        return self.config.getboolean('ClickTrigger', 'triple_click_to_alt_enabled', fallback=True)
+    @property
     def click_double_click_threshold(self) -> float:
         """双击间隔阈值（秒），两次点击间隔小于此值视为连续点击"""
         return self.config.getfloat('ClickTrigger', 'double_click_threshold', fallback=0.5)

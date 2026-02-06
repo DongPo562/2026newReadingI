@@ -24,7 +24,7 @@ from PIL import ImageGrab
 from winocr import recognize_pil
 from config_loader import app_config
 from db_manager import DatabaseManager
-from audio_recorder import AudioRecorder
+from audio_recorder import AudioRecorder, get_loopback_mic
 
 # 可清洗的标点（只在开头和结尾）
 STRIP_CHARS = "!?.,"
@@ -39,6 +39,7 @@ H_SHRINK_RATIO = 0.03    # 水平收缩比例
 V_SHRINK_RATIO = 0.05    # 垂直收缩比例
 MIN_SHRINK_PX = 2        # 最小收缩像素
 
+
 def get_cursor_position():
     """获取当前鼠标位置"""
     class POINT(ctypes.Structure):
@@ -46,6 +47,7 @@ def get_cursor_position():
     pt = POINT()
     ctypes.windll.user32.GetCursorPos(ctypes.byref(pt))
     return pt.x, pt.y
+
 
 def shrink_bbox(x, y, w, h, h_ratio=H_SHRINK_RATIO, v_ratio=V_SHRINK_RATIO, min_shrink=MIN_SHRINK_PX):
     """
@@ -74,33 +76,10 @@ def shrink_bbox(x, y, w, h, h_ratio=H_SHRINK_RATIO, v_ratio=V_SHRINK_RATIO, min_
 
     return new_x, new_y, new_w, new_h
 
+
 def point_in_rect(px, py, x, y, w, h):
     """检查点是否在矩形内（包含边框）"""
     return x <= px <= x + w and y <= py <= y + h
-
-def get_loopback_mic():
-    """获取当前默认输出设备的 Loopback（与 audio_recorder.py 保持一致）"""
-    import soundcard as sc
-    try:
-        default_speaker = sc.default_speaker()
-        print(f"[CtrlTrigger] Default Speaker: {default_speaker.name}")
-
-        all_mics = sc.all_microphones(include_loopback=True)
-        physical_mics_ids = [m.id for m in sc.all_microphones(include_loopback=False)]
-        loopback_candidates = [m for m in all_mics if m.id not in physical_mics_ids]
-
-        for mic in loopback_candidates:
-            if mic.name == default_speaker.name:
-                print(f"[CtrlTrigger] Found matching loopback: {mic.name}")
-                return mic
-
-        # 回退方案
-        fallback = sc.get_microphone(id=str(default_speaker.name), include_loopback=True)
-        print(f"[CtrlTrigger] Using fallback loopback: {fallback.name}")
-        return fallback
-    except Exception as e:
-        print(f"[CtrlTrigger] Error finding loopback: {e}")
-        return None
 
 
 def get_word_at_cursor():
@@ -186,6 +165,7 @@ def get_word_at_cursor():
         traceback.print_exc()
         return None
 
+
 def clean_and_validate(text):
     """
     清洗并校验文本
@@ -208,6 +188,7 @@ def clean_and_validate(text):
         return None
 
     return cleaned
+
 
 class CtrlTriggerListener:
     """
@@ -490,7 +471,7 @@ class CtrlTriggerListener:
         silence_threshold = app_config.silence_threshold_db
 
         try:
-            # 使用统一的 loopback 获取方法
+            # 使用统一的 loopback 获取方法（从 audio_recorder 导入）
             loopback = get_loopback_mic()
             if not loopback:
                 print("[CtrlTrigger] Failed to get loopback device")
@@ -533,7 +514,7 @@ class CtrlTriggerListener:
         silence_start = None
 
         try:
-            # 使用统一的 loopback 获取方法
+            # 使用统一的 loopback 获取方法（从 audio_recorder 导入）
             loopback = get_loopback_mic()
             if not loopback:
                 print("[CtrlTrigger] Failed to get loopback device")

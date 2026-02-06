@@ -5,6 +5,7 @@ review_window.py - Leitner复习窗口
 新增: 修饰键模拟功能 - 鼠标悬浮在单词区域时自动按下可配置的修饰键(默认Ctrl)
 """
 import os
+from datetime import date, timedelta
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QStyleOption, QStyle)
 from PyQt6.QtCore import Qt, QPoint, QTimer, QUrl, QEvent
@@ -49,6 +50,7 @@ HIGHLIGHT_DURATION_MS = 1500
 # 修饰键安全检查间隔（毫秒）
 MODIFIER_SAFETY_CHECK_MS = 500
 
+
 class ReviewToggleSwitch(ToggleSwitch):
     def paintEvent(self, event):
         p = QPainter(self)
@@ -61,6 +63,7 @@ class ReviewToggleSwitch(ToggleSwitch):
         p.setBrush(QColor(colors['knob']))
         p.drawEllipse(QPoint(int(self._thumb_pos + self._thumb_radius), int(self.height() / 2)),
             self._thumb_radius, self._thumb_radius)
+
 
 class ReviewWindow(QWidget):
     def __init__(self, db_manager, parent=None):
@@ -321,8 +324,30 @@ class ReviewWindow(QWidget):
     def on_remember(self):
         if self.current_index < len(self.words):
             self._stop_playback()
-            word = self.words[self.current_index]['word']
-            print(f"用户点击了记得按钮，当前单词：{word}")
+            word_data = self.words[self.current_index]
+            word = word_data['word']
+            number = word_data['number']
+            current_box = word_data.get('box_level', 1) or 1
+            current_remember = word_data.get('remember', 0) or 0
+            current_forget = word_data.get('forget', 0) or 0
+
+            # Leitner: 记得 -> box_level + 1 (最大 max_box_level)
+            new_box = min(current_box + 1, app_config.review_max_box_level)
+            interval = app_config.get_box_interval(new_box)
+            today = date.today()
+            next_review = (today + timedelta(days=interval)).isoformat()
+            new_remember = current_remember + 1
+            last_review = today.isoformat()
+
+            # 更新数据库
+            try:
+                self.db_manager.update_word_box(
+                    number, new_box, next_review, new_remember, current_forget, last_review
+                )
+                print(f"[ReviewWindow] 记得 '{word}': box {current_box} -> {new_box}, next_review={next_review}")
+            except Exception as e:
+                print(f"[ReviewWindow] 更新数据库失败: {e}")
+
             self.current_index += 1
             self.update_content()
             self._trigger_auto_play()
@@ -330,8 +355,29 @@ class ReviewWindow(QWidget):
     def on_forget(self):
         if self.current_index < len(self.words):
             self._stop_playback()
-            word = self.words[self.current_index]['word']
-            print(f"用户点击了不记得按钮，当前单词：{word}")
+            word_data = self.words[self.current_index]
+            word = word_data['word']
+            number = word_data['number']
+            current_remember = word_data.get('remember', 0) or 0
+            current_forget = word_data.get('forget', 0) or 0
+
+            # Leitner: 不记得 -> box_level 重置为 1
+            new_box = 1
+            interval = app_config.get_box_interval(new_box)
+            today = date.today()
+            next_review = (today + timedelta(days=interval)).isoformat()
+            new_forget = current_forget + 1
+            last_review = today.isoformat()
+
+            # 更新数据库
+            try:
+                self.db_manager.update_word_box(
+                    number, new_box, next_review, current_remember, new_forget, last_review
+                )
+                print(f"[ReviewWindow] 不记得 '{word}': box -> 1, next_review={next_review}")
+            except Exception as e:
+                print(f"[ReviewWindow] 更新数据库失败: {e}")
+
             self.current_index += 1
             self.update_content()
             self._trigger_auto_play()

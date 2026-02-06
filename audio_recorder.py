@@ -12,6 +12,33 @@ from db_manager import DatabaseManager
 from audio_processor import generate_slow_audio
 from text_processor import is_valid_word, extract_letter_sequence
 
+
+def get_loopback_mic():
+    """
+    获取当前默认输出设备的 Loopback 设备
+    
+    Returns:
+        loopback mic 对象，失败时返回 None
+    """
+    try:
+        default_speaker = sc.default_speaker()
+        print(f"[Recorder] Default Speaker: {default_speaker.name}")
+        all_mics = sc.all_microphones(include_loopback=True)
+        physical_mics_ids = [m.id for m in sc.all_microphones(include_loopback=False)]
+        loopback_candidates = [m for m in all_mics if m.id not in physical_mics_ids]
+        for mic in loopback_candidates:
+            if mic.name == default_speaker.name:
+                return mic
+        fallback = sc.get_microphone(id=str(default_speaker.name), include_loopback=True)
+        if fallback.id in [m.id for m in loopback_candidates]:
+            return fallback
+        print("[Recorder] Warning: Could not confirm loopback device identity. Using fallback.")
+        return fallback
+    except Exception as e:
+        print(f"[Recorder] Error finding loopback: {e}")
+        return None
+
+
 class AudioRecorder(threading.Thread):
     def __init__(self, content, start_silence_duration=None):
         """
@@ -40,29 +67,10 @@ class AudioRecorder(threading.Thread):
         self.save_dir = app_config.save_dir
         self.db_manager = DatabaseManager()
 
-    def get_loopback_mic(self):
-        try:
-            default_speaker = sc.default_speaker()
-            print(f"[Recorder] Default Speaker: {default_speaker.name}")
-            all_mics = sc.all_microphones(include_loopback=True)
-            physical_mics_ids = [m.id for m in sc.all_microphones(include_loopback=False)]
-            loopback_candidates = [m for m in all_mics if m.id not in physical_mics_ids]
-            for mic in loopback_candidates:
-                if mic.name == default_speaker.name:
-                    return mic
-            fallback = sc.get_microphone(id=str(default_speaker.name), include_loopback=True)
-            if fallback.id in [m.id for m in loopback_candidates]:
-                return fallback
-            print("[Recorder] Warning: Could not confirm loopback device identity. Using fallback.")
-            return fallback
-        except Exception as e:
-            print(f"[Recorder] Error finding loopback: {e}")
-            return None
-
     def run(self):
         print("[Recorder] Starting recording process...")
         try:
-            mic = self.get_loopback_mic()
+            mic = get_loopback_mic()
             if not mic:
                 print("[Recorder] Error: Could not find loopback device.")
                 return
