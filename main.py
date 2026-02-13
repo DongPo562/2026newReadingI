@@ -13,14 +13,14 @@ from text_processor import process_text
 from audio_recorder import AudioRecorder
 import alt_trigger
 import ctrl_trigger
+import quiz_trigger
+import emoji_trigger
 from config_loader import app_config as config
-
 
 def get_screen_size():
     """获取屏幕尺寸"""
     user32 = ctypes.windll.user32
     return user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)
-
 
 class ExitServer(threading.Thread):
     def __init__(self, app_instance):
@@ -44,7 +44,6 @@ class ExitServer(threading.Thread):
                         break
         except Exception as e:
             print(f"[ExitServer] Error: {e}")
-
 
 class MainApp:
     def __init__(self):
@@ -76,12 +75,20 @@ class MainApp:
         self.ctrl_listener = ctrl_trigger.CtrlTriggerListener()
         self.ctrl_listener.start()
 
+        # 启动 Quiz 触发器（Ctrl+U 出题）
+        self.quiz_trigger_listener = quiz_trigger.QuizTriggerListener()
+        self.quiz_trigger_listener.start()
+
+        # 启动 Emoji 触发器（鼠标中键 / Alt+\ 插入 emoji）
+        self.emoji_trigger_listener = emoji_trigger.EmojiTriggerListener()
+        self.emoji_trigger_listener.start()
+
         # 键盘控制器（用于三连击后模拟按键）
         self.keyboard_controller = KeyboardController()
-        
+
         # 鼠标控制器（用于三连击后模拟点击）
         self.mouse_controller = MouseController()
-        
+
         print("[App] Initialized. Listening for events...")
 
     def stop_current_tasks(self):
@@ -159,7 +166,7 @@ class MainApp:
     def _simulate_click_to_cancel_selection(self):
         """
         模拟点击以取消选中状态和关闭悬浮横条
-        
+
         策略：
         - 如果鼠标位置靠近屏幕下方（下半部分）：上移100px + 右移50px
         - 如果鼠标位置靠近屏幕上方（上半部分）：下移100px + 右移50px
@@ -168,10 +175,10 @@ class MainApp:
             # 获取当前鼠标位置
             current_pos = self.mouse_controller.position
             current_x, current_y = current_pos
-            
+
             # 获取屏幕尺寸
             screen_width, screen_height = get_screen_size()
-            
+
             # 判断鼠标位置并计算偏移
             if current_y > screen_height / 2:
                 # 靠近屏幕下方：上移100px + 右移50px
@@ -183,24 +190,24 @@ class MainApp:
                 offset_x = 50
                 offset_y = 100
                 print(f"[Trigger] Mouse near top, clicking at offset (+{offset_x}, +{offset_y})")
-            
+
             # 计算目标位置
             target_x = current_x + offset_x
             target_y = current_y + offset_y
-            
+
             # 确保目标位置在屏幕范围内
             target_x = max(0, min(target_x, screen_width - 1))
             target_y = max(0, min(target_y, screen_height - 1))
-            
+
             # 移动到目标位置并点击
             self.mouse_controller.position = (target_x, target_y)
             self.mouse_controller.click(mouse.Button.left)
-            
+
             # 立即返回原位
             self.mouse_controller.position = current_pos
-            
+
             print(f"[Trigger] Clicked at ({target_x}, {target_y}), returned to ({current_x}, {current_y})")
-            
+
         except Exception as e:
             print(f"[Trigger] Error simulating click: {e}")
             # 出错时回退到方向键方案
@@ -220,13 +227,13 @@ class MainApp:
                 print(f"[Trigger] triple_click detected ({click_count} clicks) - ignored (disabled in config).")
                 return
             print(f"[Trigger] triple_click detected ({click_count} clicks) - simulating click + Alt.")
-            
+
             # 1. 模拟点击空白处：取消选中状态并关闭TTS悬浮横条
             self._simulate_click_to_cancel_selection()
-            
+
             # 2. 短暂延迟确保点击生效
             time.sleep(0.05)
-            
+
             # 3. 模拟Alt键：触发alt_trigger流程（会重新三击选中文本）
             self.keyboard_controller.press(Key.alt_l)
             self.keyboard_controller.release(Key.alt_l)
@@ -291,6 +298,10 @@ class MainApp:
             self.alt_listener.stop()
         if hasattr(self, 'ctrl_listener') and self.ctrl_listener:
             self.ctrl_listener.stop()
+        if hasattr(self, 'quiz_trigger_listener') and self.quiz_trigger_listener:
+            self.quiz_trigger_listener.stop()
+        if hasattr(self, 'emoji_trigger_listener') and self.emoji_trigger_listener:
+            self.emoji_trigger_listener.stop()
         if hasattr(self, 'listener') and self.listener:
             self.listener.stop()
         os._exit(0)
@@ -302,7 +313,6 @@ class MainApp:
         self.listener = mouse.Listener(on_click=self.on_click)
         self.listener.start()
         self.listener.join()
-
 
 if __name__ == "__main__":
     app = MainApp()

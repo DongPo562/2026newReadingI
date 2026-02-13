@@ -2,6 +2,7 @@ import sqlite3
 import os
 import time
 import logging
+import threading
 from config_loader import app_config
 
 class DatabaseManager:
@@ -10,28 +11,44 @@ class DatabaseManager:
         self.wal_mode = app_config.db_wal_mode
         self.busy_timeout = app_config.db_busy_timeout
         self.retry_count = app_config.db_retry_count
-        self.connection = None
+        self._local = threading.local()
 
     def connect(self):
         try:
-            self.connection = sqlite3.connect(self.db_path, check_same_thread=False)
-            self.connection.execute(f"PRAGMA busy_timeout = {self.busy_timeout}")
+            conn = getattr(self._local, "connection", None)
+            if conn is not None:
+                return conn
+
+            conn = sqlite3.connect(self.db_path, timeout=5.0)
+            conn.execute(f"PRAGMA busy_timeout = {self.busy_timeout}")
             if self.wal_mode:
-                self.connection.execute("PRAGMA journal_mode=WAL")
-            self.connection.row_factory = sqlite3.Row
+                conn.execute("PRAGMA journal_mode=WAL")
+            conn.row_factory = sqlite3.Row
+            self._local.connection = conn
+            return conn
         except sqlite3.Error as e:
             print(f"Database connection error: {e}")
             raise
 
     def get_connection(self):
-        if not self.connection:
-            self.connect()
-        return self.connection
+        conn = getattr(self._local, "connection", None)
+        if conn is None:
+            conn = self.connect()
+        return conn
+
+    @property
+    def connection(self):
+        return self.get_connection()
+
+    @connection.setter
+    def connection(self, value):
+        self._local.connection = value
 
     def close(self):
-        if self.connection:
-            self.connection.close()
-            self.connection = None
+        conn = getattr(self._local, "connection", None)
+        if conn:
+            conn.close()
+            self._local.connection = None
 
     def init_db(self):
         if not self.connection:
@@ -55,6 +72,9 @@ class DatabaseManager:
 
             # Phase 1: Letter Sequence Migration
             self.migrate_add_letter_sequence()
+
+            # Quiz: review_questions 表迁移
+            self.migrate_create_review_questions()
         except sqlite3.Error as e:
             print(f"Database initialization error: {e}")
             raise
@@ -345,4 +365,107 @@ class DatabaseManager:
                 (letter_seq,)
             )
             return cursor.fetchone()
+        return self._execute_with_retry(operation)
+
+    # ==================== Quiz: review_questions 表 ====================
+    def migrate_create_review_questions(self):
+        """创建 review_questions 表"""
+        if not self.connection:
+            self.connect()
+        create_sql = """
+        CREATE TABLE IF NOT EXISTS review_questions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            save_time TEXT NOT NULL,
+            content TEXT NOT NULL,
+            sentence_content TEXT,
+            ai_status TEXT DEFAULT NULL,
+            ai_question TEXT,
+            user_answer TEXT,
+            is_correct INTEGER,
+            ai_feedback TEXT,
+            answered_time TEXT
+        );
+        """
+        try:
+            with self.connection:
+                self.connection.execute(create_sql)
+            self._migrate_add_question_columns()
+            print("[Migration] review_questions table ready")
+        except sqlite3.Error as e:
+            print(f"[Migration] Error creating review_questions: {e}")
+
+    def _migrate_add_question_columns(self):
+        migrations = [
+            ("ai_status", "TEXT DEFAULT NULL"),
+        ]
+        for field_name, field_type in migrations:
+            try:
+                self.connection.execute(
+                    f"ALTER TABLE review_questions ADD COLUMN {field_name} {field_type}"
+                )
+                print(f"[Migration] Added review_questions column: {field_name}")
+            except sqlite3.OperationalError as e:
+                if "duplicate column name" in str(e).lower():
+                    pass
+                else:
+                    raise
+
+    def insert_question(self, save_time, content, sentence_content, ai_question=None, ai_status=None):
+        """插入一条出题记录"""
+        def operation():
+            cursor = self.connection.cursor()
+            cursor.execute(
+                "INSERT INTO review_questions (save_time, content, sentence_content, ai_status, ai_question) VALUES (?, ?, ?, ?, ?)",
+                (save_time, content, sentence_content, ai_status, ai_question)
+            )
+            self.connection.commit()
+            return cursor.lastrowid
+        return self._execute_with_retry(operation)
+
+    def get_pending_questions(self):
+        """获取未答题的记录"""
+        def operation():
+            cursor = self.connection.cursor()
+            cursor.execute(
+                "SELECT * FROM review_questions WHERE is_correct IS NULL ORDER BY id ASC"
+            )
+            return cursor.fetchall()
+        return self._execute_with_retry(operation)
+
+    def get_question(self, question_id):
+        def operation():
+            cursor = self.connection.cursor()
+            cursor.execute("SELECT * FROM review_questions WHERE id = ?", (question_id,))
+            return cursor.fetchone()
+        return self._execute_with_retry(operation)
+
+    def update_question_status(self, question_id, ai_status):
+        def operation():
+            cursor = self.connection.cursor()
+            cursor.execute(
+                "UPDATE review_questions SET ai_status = ? WHERE id = ?",
+                (ai_status, question_id)
+            )
+            self.connection.commit()
+        return self._execute_with_retry(operation)
+
+    def update_question_ai_result(self, question_id, ai_question, ai_status):
+        def operation():
+            cursor = self.connection.cursor()
+            cursor.execute(
+                "UPDATE review_questions SET ai_question = ?, ai_status = ? WHERE id = ?",
+                (ai_question, ai_status, question_id)
+            )
+            self.connection.commit()
+        return self._execute_with_retry(operation)
+
+    def update_answer(self, question_id, user_answer, is_correct, ai_feedback, answered_time):
+        """更新用户答案和批改结果"""
+        def operation():
+            cursor = self.connection.cursor()
+            cursor.execute(
+                "UPDATE review_questions SET user_answer = ?, is_correct = ?, ai_feedback = ?, answered_time = ? WHERE id = ?",
+                (user_answer, is_correct, ai_feedback, answered_time, question_id)
+            )
+            self.connection.commit()
         return self._execute_with_retry(operation)

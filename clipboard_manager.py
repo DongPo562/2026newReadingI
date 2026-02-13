@@ -37,7 +37,7 @@ def capture_selection():
 
     # Clear clipboard to ensure we capture fresh content
     set_clipboard_content("")
-    time.sleep(0.05) 
+    time.sleep(0.05)
 
     perform_copy()
 
@@ -53,7 +53,7 @@ def capture_selection():
     # We return empty string in that case (which will fail validation later or be ignored)
 
     # Restore old clipboard
-    # We can do this immediately or wait a bit. 
+    # We can do this immediately or wait a bit.
     # Original code waited 0.5s before restore.
     time.sleep(0.8)
     set_clipboard_content(old_clipboard)

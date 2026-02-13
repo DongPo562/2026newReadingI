@@ -100,7 +100,6 @@ class ConsistencyChecker(QThread):
                     print(f"Consistency check warning: failed to remove file {fname}, reason: {e}")
             print(f"Consistency check completed, removed {removed_records} records and {removed_files} files")
             try:
-
                 project_root = os.path.dirname(os.path.abspath(__file__))
                 text_dir = os.path.join(project_root, 'text')
                 if os.path.exists(text_dir):

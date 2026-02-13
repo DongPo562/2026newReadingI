@@ -1,0 +1,138 @@
+{
+  "ai_service.py": {
+    "content_hash": "50dde4fc0c1d354002c4d6602a0bfee1790522ec883463356da7d5604448b008",
+    "last_synced": "2026-02-12T01:17:12"
+  },
+  "alt_trigger.py": {
+    "content_hash": "f21e56c464bc0f118891861dee2d690e564598df0d8efc103f81e846f18d6d9d",
+    "last_synced": "2026-02-12T01:17:12"
+  },
+  "audio_player.py": {
+    "content_hash": "d829db0dfa1e45a6559e9f76d142eea74c01d27a49a1bc2bf23e85cbe7bf5152",
+    "last_synced": "2026-02-12T01:17:12"
+  },
+  "audio_processor.py": {
+    "content_hash": "0181ce7cb9dcb1d444215a3b30de04d32c7abab38c3ea062b395e157cc4d3898",
+    "last_synced": "2026-02-12T01:17:12"
+  },
+  "audio_recorder.py": {
+    "content_hash": "608e79caac14ae161823f3adee69938841d33ae35bbf112016c9565107bfd02e",
+    "last_synced": "2026-02-12T01:17:12"
+  },
+  "auto_record_trigger.py": {
+    "content_hash": "fe1a4f127ce38f31075f00f5f268a07ba5693b41ceeada06ddbd9d4c38b39ca1",
+    "last_synced": "2026-02-12T01:17:12"
+  },
+  "clipboard_manager.py": {
+    "content_hash": "e2dd637be714cd41df3a7011e0c9b6c88ec3d183e42e9aa9cf02bf02ac5f6150",
+    "last_synced": "2026-02-12T01:17:12"
+  },
+  "config_loader.py": {
+    "content_hash": "94e316dbb9d02d8d6e405d6f0017420b6956da85fa59728d7a1c63bf00610a33",
+    "last_synced": "2026-02-12T01:49:18"
+  },
+  "ctrl_trigger.py": {
+    "content_hash": "f573a73b3686d23ab218b585c868f0b9bf5edc87ceb3e340f7b2fefd2b1f5f1b",
+    "last_synced": "2026-02-12T01:17:12"
+  },
+  "db_manager.py": {
+    "content_hash": "79c07c098969d794dd529021d3a8c0c843385d259b7dcd2bfd49bf37334b3b8b",
+    "last_synced": "2026-02-12T01:17:12"
+  },
+  "floating_ui.py": {
+    "content_hash": "2620f15e64aa2f920d443d0b1d00924356b5ec20d2d156830a22dbc1551247c7",
+    "last_synced": "2026-02-12T01:17:12"
+  },
+  "list_panel.py": {
+    "content_hash": "b4ef5915f7b7bfc47ea7857ac202914a0167a41d9971adceb8678416574c4040",
+    "last_synced": "2026-02-12T01:17:12"
+  },
+  "main.py": {
+    "content_hash": "a12e71ac3035ec72f996c3935c9910a7fc1afb54cdeb72d0673edcff4f52e621",
+    "last_synced": "2026-02-12T01:17:12"
+  },
+  "quiz_card.py": {
+    "content_hash": "084670c878ea0ce4f5231ecd09f1cb8c3f71cb6b6c54198bc253ed7772637c89",
+    "last_synced": "2026-02-12T01:17:12"
+  },
+  "quiz_trigger.py": {
+    "content_hash": "d03be2661c40f72e5c562e29f17dc11486e1b703f68ca7cdd0a3447c3aa00c4c",
+    "last_synced": "2026-02-12T01:17:12"
+  },
+  "review_window.py": {
+    "content_hash": "9e80d9becfc8ef1b6e3a75dc8b6781db7023bee84d2d1e47e2e415e46485e9fd",
+    "last_synced": "2026-02-12T01:17:12"
+  },
+  "style_manager.py": {
+    "content_hash": "17fe14809f347854d1417d824ff67381c5df039cb844d6e87275063f8c4d3eb6",
+    "last_synced": "2026-02-12T01:17:12"
+  },
+  "test_api.py": {
+    "content_hash": "982afd150cc6b7e70150c944b244442d280208751386d6f24d7da9bfb9da08be",
+    "last_synced": "2026-02-12T01:17:12"
+  },
+  "test_review.py": {
+    "content_hash": "66f2c456569e9b2d8a4846a7ff06002e37800e6ee2f229399fc730b454fd776a",
+    "last_synced": "2026-02-12T01:17:12"
+  },
+  "text_processor.py": {
+    "content_hash": "325ed805d42781ea91653cf7ba57af70d742fa939d762ece3701807f5c1d9686",
+    "last_synced": "2026-02-12T01:17:12"
+  },
+  "ui_automation.py": {
+    "content_hash": "627d0652b7bcc3a624fa45c71d86e33e5f464f18e76318622f4a6d3e62db7517",
+    "last_synced": "2026-02-12T01:17:12"
+  },
+  "ui_services.py": {
+    "content_hash": "93b90fbbc9009bcfede5943ef14053c622b4b9299316178044a52f3c5f6b5ab6",
+    "last_synced": "2026-02-12T01:17:12"
+  },
+  "widgets.py": {
+    "content_hash": "3f004938c1c85ea97fa45897f77335853ca6810c4b36c62713899f0736037986",
+    "last_synced": "2026-02-12T01:17:12"
+  },
+  "word_game.py": {
+    "content_hash": "c0fe1fdfefe3a24230f2bca05150a8e600c7988ee7f6b7301759730292b30300",
+    "last_synced": "2026-02-12T01:17:12"
+  },
+  "config.ini": {
+    "content_hash": "d9626360a63e81a3beae7470091c1ccd6fe03761d82fe2c1f90afd9f9002a23d",
+    "last_synced": "2026-02-12T01:49:26"
+  },
+  "error_log.txt": {
+    "content_hash": "e99d1140a669141d20487abcef189b4f8539a0d1739918ca2293abe4757dac07",
+    "last_synced": "2026-02-12T01:17:12"
+  },
+  "requirements.txt": {
+    "content_hash": "51d6424861054433cf778557e60d32d683b3925dbb1ff606282c49681594081c",
+    "last_synced": "2026-02-12T01:17:12"
+  },
+  "review_window.qss": {
+    "content_hash": "2b6aa778d4541e99383f0b6ef0c28de57b18193999ff315cbfd9e9ad474e2268",
+    "last_synced": "2026-02-12T01:17:12"
+  },
+  "AGENTS.md": {
+    "content_hash": "05274260a77f68e0147c5cbf8717b4598a2daaec9f57487985018775f0677ff5",
+    "last_synced": "2026-02-12T01:17:12"
+  },
+  "README.md": {
+    "content_hash": "c32446faac9092380e9e09a007c28ea98b9b2c48b35107037126231691c496c9",
+    "last_synced": "2026-02-10T19:53:52"
+  },
+  "\u529f\u80fd\u89c4\u5212105.md": {
+    "content_hash": "f62410b47fb44b9a2cdb6f4f2cd7d997a2b346a51a64b1e99809b966c34a9bde",
+    "last_synced": "2026-02-10T19:53:57"
+  },
+  "\u529f\u80fd\u89c4\u5212106.md": {
+    "content_hash": "461a3e87824f221d44935caf846ce955420b2f89e9e1185963f5bee7ff6b3beb",
+    "last_synced": "2026-02-12T01:17:12"
+  },
+  "emoji_trigger.py": {
+    "content_hash": "58e6af78f3ddfeb03bec51c1f86fce3c8224479ffe68e40c6998404f301ddfc0",
+    "last_synced": "2026-02-12T01:49:22"
+  },
+  "\u6d4b\u8bd5\u7ed3\u679c.txt": {
+    "content_hash": "363e32295fe90d2f3836409f92b9a5c0ffa2ca84d82ca49ee6cc059121db9dc1",
+    "last_synced": "2026-02-12T01:49:30"
+  }
+}

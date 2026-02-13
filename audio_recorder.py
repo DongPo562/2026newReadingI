@@ -12,11 +12,10 @@ from db_manager import DatabaseManager
 from audio_processor import generate_slow_audio
 from text_processor import is_valid_word, extract_letter_sequence
 
-
 def get_loopback_mic():
     """
     获取当前默认输出设备的 Loopback 设备
-    
+
     Returns:
         loopback mic 对象，失败时返回 None
     """
@@ -37,7 +36,6 @@ def get_loopback_mic():
     except Exception as e:
         print(f"[Recorder] Error finding loopback: {e}")
         return None
-
 
 class AudioRecorder(threading.Thread):
     def __init__(self, content, start_silence_duration=None):

@@ -167,6 +167,7 @@ class WordGameWindow(QWidget):
             QPushButton:pressed {
                 background-color: #1976D2;
             }
+
         """,
         'word_btn_target': """
             QPushButton {
@@ -233,6 +234,7 @@ class WordGameWindow(QWidget):
                 font-size: 14px;
                 font-weight: 500;
             }
+
             QPushButton:hover { 
                 background-color: #66BB6A; 
             }

@@ -50,7 +50,6 @@ HIGHLIGHT_DURATION_MS = 1500
 # 修饰键安全检查间隔（毫秒）
 MODIFIER_SAFETY_CHECK_MS = 500
 
-
 class ReviewToggleSwitch(ToggleSwitch):
     def paintEvent(self, event):
         p = QPainter(self)
@@ -63,7 +62,6 @@ class ReviewToggleSwitch(ToggleSwitch):
         p.setBrush(QColor(colors['knob']))
         p.drawEllipse(QPoint(int(self._thumb_pos + self._thumb_radius), int(self.height() / 2)),
             self._thumb_radius, self._thumb_radius)
-
 
 class ReviewWindow(QWidget):
     def __init__(self, db_manager, parent=None):

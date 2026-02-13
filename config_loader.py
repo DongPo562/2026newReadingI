@@ -1,6 +1,8 @@
 import configparser
 import os
+from dotenv import load_dotenv
 
+load_dotenv()
 
 class Config:
     def __init__(self, config_path='config.ini'):
@@ -9,6 +11,10 @@ class Config:
         if not os.path.exists(config_path):
             raise FileNotFoundError(f"Config file not found: {config_path}")
         self.config.read(config_path)
+
+    def reload(self):
+        self.config = configparser.ConfigParser()
+        self.config.read(self.config_path)
 
     def save(self):
         with open(self.config_path, 'w') as configfile:
@@ -520,6 +526,98 @@ class Config:
         """重复文本时，系统声音结束后延迟播放已有录音的时间（秒）"""
         return self.config.getfloat('CtrlTrigger', 'duplicate_play_delay', fallback=0.1)
 
+    # ==================== QuizTrigger 配置 ====================
+    @property
+    def quiz_trigger_enabled(self) -> bool:
+        """是否启用出题功能"""
+        return self.config.getboolean('QuizTrigger', 'enabled', fallback=True)
+    @property
+    def quiz_trigger_delay(self) -> float:
+        """Ctrl+U 后的安全余量延迟时间（秒）"""
+        return self.config.getfloat('QuizTrigger', 'trigger_delay', fallback=0.02)
+    @property
+    def quiz_trigger_api_endpoint(self) -> str:
+        """NIM 平台 API 地址"""
+        return self.config.get('QuizTrigger', 'api_endpoint', fallback='').strip()
+    @property
+    def quiz_trigger_api_key(self) -> str:
+        """API 密钥，优先读取环境变量 NIM_API_KEY"""
+        return (os.environ.get("NIM_API_KEY") or self.config.get('QuizTrigger', 'api_key', fallback='')).strip()
+    @property
+    def quiz_trigger_api_timeout(self) -> float:
+        """请求超时时间（秒）"""
+        return self.config.getfloat('QuizTrigger', 'api_timeout', fallback=15.0)
+    @property
+    def quiz_trigger_fallback_to_local(self) -> bool:
+        """AI 失败时是否回退到本地出题"""
+        return self.config.getboolean('QuizTrigger', 'fallback_to_local', fallback=True)
+    @property
+    def quiz_trigger_debounce_interval(self) -> float:
+        """Ctrl+U 防抖间隔（秒）"""
+        return self.config.getfloat('QuizTrigger', 'debounce_interval', fallback=0.5)
+    @property
+    def quiz_trigger_model_id(self) -> int:
+        """大模型选择（1=Kimi2.5, 3=DeepSeekV3.2, 5=MiniMaxM2.1, 6=GLM4.7, 7=DoubaoSeed1.8）"""
+        return self.config.getint('QuizTrigger', 'model_id', fallback=3)
+    @property
+    def quiz_trigger_enable_reasoning(self) -> bool:
+        """是否启用 reasoning（思维链）"""
+        return self.config.getboolean('QuizTrigger', 'enable_reasoning', fallback=False)
+
+    # ==================== EmojiTrigger 配置 ====================
+    @property
+    def emoji_trigger_enabled(self) -> bool:
+        return self.config.getboolean('EmojiTrigger', 'enabled', fallback=True)
+
+    @property
+    def emoji_trigger_key(self) -> str:
+        return self.config.get('EmojiTrigger', 'trigger_key', fallback='\\')
+
+    @property
+    def emoji_trigger_delay(self) -> float:
+        return self.config.getfloat('EmojiTrigger', 'trigger_delay', fallback=0.02)
+
+    @property
+    def emoji_trigger_debounce_interval(self) -> float:
+        return self.config.getfloat('EmojiTrigger', 'debounce_interval', fallback=0.5)
+
+    @property
+    def emoji_trigger_api_timeout(self) -> float:
+        return self.config.getfloat('EmojiTrigger', 'api_timeout', fallback=8.0)
+
+    @property
+    def emoji_trigger_fallback_emoji(self) -> str:
+        return self.config.get('EmojiTrigger', 'fallback_emoji', fallback='❓').strip() or '❓'
+
+    @property
+    def emoji_trigger_max_input_chars(self) -> int:
+        return self.config.getint('EmojiTrigger', 'max_input_chars', fallback=60)
+
+    @property
+    def emoji_trigger_model_id(self) -> int:
+        return self.config.getint('EmojiTrigger', 'model_id', fallback=5)
+
+    @property
+    def emoji_trigger_enable_reasoning(self) -> bool:
+        return self.config.getboolean('EmojiTrigger', 'enable_reasoning', fallback=False)
+
+    # ==================== QuizCard 配置 ====================
+    @property
+    def quiz_card_width(self) -> int:
+        """卡片宽度（像素）"""
+        return self.config.getint('QuizCard', 'window_width', fallback=800)
+    @property
+    def quiz_card_height(self) -> int:
+        """卡片高度（像素）"""
+        return self.config.getint('QuizCard', 'window_height', fallback=520)
+    @property
+    def quiz_card_opacity(self) -> float:
+        """透明度（0-1）"""
+        return self.config.getfloat('QuizCard', 'opacity', fallback=0.9)
+    @property
+    def quiz_card_font_size(self) -> int:
+        """题目字体大小（像素）"""
+        return self.config.getint('QuizCard', 'font_size', fallback=16)
 
 try:
     current_dir = os.path.dirname(os.path.abspath(__file__))

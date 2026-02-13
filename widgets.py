@@ -61,7 +61,7 @@ class ToggleSwitch(QWidget):
         p.setPen(Qt.PenStyle.NoPen)
         p.drawRoundedRect(0, 0, self.width(), self.height(), self.height() / 2, self.height() / 2)
         p.setBrush(QColor("white"))
-        p.drawEllipse(QPoint(int(self._thumb_pos + self._thumb_radius), int(self.height() / 2)), 
+        p.drawEllipse(QPoint(int(self._thumb_pos + self._thumb_radius), int(self.height() / 2)),
             self._thumb_radius, self._thumb_radius)
 
 class ClickableLabel(QLabel):

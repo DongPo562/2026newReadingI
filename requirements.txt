@@ -19,3 +19,5 @@ winocr
 pyautogui
 
 Pillow
+
+python-dotenv

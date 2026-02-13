@@ -8,4 +8,12 @@ text/
 *.db-shm
 *.db-wal
 rollback/
-ocr_debug.png
+
+# Ignore all PNG images in project root
+*.png
+
+# Ignore env file
+.env
+
+# Ignore all first-level folders and everything inside them
+*/

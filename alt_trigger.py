@@ -86,11 +86,16 @@ class AltTriggerListener(threading.Thread):
         # 初始化自动补录触发器
         self.auto_record_trigger = AutoRecordTrigger()
 
+        # 跟踪触发键按下期间是否有其他键被按下
+        self._trigger_key_pressed = False
+        self._other_key_pressed = False
+        self._state_lock = threading.Lock()
+
         logger.info(f"[AltTrigger] Configured trigger key: {app_config.alt_trigger_key}")
 
     def run(self):
         logger.info("[AltTrigger] Starting listener...")
-        with keyboard.Listener(on_release=self.on_release) as self.listener:
+        with keyboard.Listener(on_press=self.on_press, on_release=self.on_release) as self.listener:
             self.listener.join()
 
     def stop(self):
@@ -98,12 +103,37 @@ class AltTriggerListener(threading.Thread):
         if self.listener:
             self.listener.stop()
 
+    def on_press(self, key):
+        """按键按下事件：跟踪触发键状态和其他按键"""
+        if not self.running:
+            return False
+
+        with self._state_lock:
+            if key in self.trigger_keys:
+                # 触发键被按下，重置状态
+                self._trigger_key_pressed = True
+                self._other_key_pressed = False
+            elif self._trigger_key_pressed:
+                # 触发键按下期间，有其他键被按下
+                self._other_key_pressed = True
+                logger.debug(f"[AltTrigger] Other key pressed while trigger key held: {key}")
+
     def on_release(self, key):
         if not self.running:
             return False
 
         # 检查是否是配置的触发键
         if key in self.trigger_keys:
+            with self._state_lock:
+                trigger_key_was_pressed = self._trigger_key_pressed
+                other_key_was_pressed = self._other_key_pressed
+                self._trigger_key_pressed = False
+
+            # 如果在触发键按下期间有其他键被按下，则不触发
+            if other_key_was_pressed:
+                logger.info("[AltTrigger] Trigger cancelled: other key was pressed during trigger key hold")
+                return
+
             current_time = time.time()
             if current_time - self.last_trigger_time < self.debounce_interval:
                 return
