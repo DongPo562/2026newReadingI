@@ -15,5 +15,8 @@ rollback/
 # Ignore env file
 .env
 
+# Ignore README
+README.md
+
 # Ignore all first-level folders and everything inside them
 */
