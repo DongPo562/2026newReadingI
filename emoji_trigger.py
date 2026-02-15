@@ -20,17 +20,16 @@ class EmojiTriggerListener:
         self.enabled = app_config.emoji_trigger_enabled
         self.trigger_key = app_config.emoji_trigger_key
         self.trigger_delay = app_config.emoji_trigger_delay
-        self.debounce_interval = app_config.emoji_trigger_debounce_interval
+        self._window_seconds = app_config.emoji_trigger_execution_window_seconds
         self.api_timeout = app_config.emoji_trigger_api_timeout
         self.fallback_emoji = app_config.emoji_trigger_fallback_emoji
         self.max_input_chars = app_config.emoji_trigger_max_input_chars
 
-        self.last_trigger_time = 0.0
+        self._last_trigger_time = 0.0
+        self._cancel_event = threading.Event()
         self.listener = None
         self.alt_pressed = False
         self.keyboard_controller = KeyboardController()
-        self._process_lock = threading.Lock()
-        self._processing = False
 
         self.ai_service = AIService(
             model_id=app_config.emoji_trigger_model_id,
@@ -40,7 +39,7 @@ class EmojiTriggerListener:
             enable_retry=False,
         )
 
-        print(f"[EmojiTrigger] Initialized (enabled={self.enabled}, trigger=Alt+\\, debounce={self.debounce_interval}s)")
+        print(f"[EmojiTrigger] Initialized (enabled={self.enabled}, trigger=Alt+\\, window={self._window_seconds}s)")
 
     def start(self):
         if not self.enabled:
@@ -61,14 +60,6 @@ class EmojiTriggerListener:
         self.ai_service.shutdown()
         print("[EmojiTrigger] Listener stopped")
 
-    def _debounced(self):
-        now = time.time()
-        if now - self.last_trigger_time < self.debounce_interval:
-            print("[EmojiTrigger] Debounced duplicate trigger")
-            return True
-        self.last_trigger_time = now
-        return False
-
     def _is_backslash_key(self, key):
         try:
             if hasattr(key, "char") and key.char is not None:
@@ -85,34 +76,22 @@ class EmojiTriggerListener:
             return
         if not (self.alt_pressed and self._is_backslash_key(key)):
             return
-        if self._debounced():
+
+        now = time.time()
+        if now - self._last_trigger_time < self._window_seconds:
+            print("[EmojiTrigger] Within execution window, skipping")
             return
-        if not self._mark_processing_started():
-            print("[EmojiTrigger] Previous trigger still running, skipping")
-            return
+
+        self._cancel_event.set()
+        self._cancel_event = threading.Event()
+        self._last_trigger_time = now
+
         print("[EmojiTrigger] Alt+\\ detected")
-        threading.Thread(target=self._process_trigger_guarded, daemon=True).start()
+        threading.Thread(target=self._process_trigger, daemon=True).start()
 
     def _on_key_release(self, key):
         if key in (Key.alt_l, Key.alt_r):
             self.alt_pressed = False
-
-    def _mark_processing_started(self):
-        with self._process_lock:
-            if self._processing:
-                return False
-            self._processing = True
-            return True
-
-    def _mark_processing_finished(self):
-        with self._process_lock:
-            self._processing = False
-
-    def _process_trigger_guarded(self):
-        try:
-            self._process_trigger()
-        finally:
-            self._mark_processing_finished()
 
     def _contains_cjk_chars(self, text):
         for ch in text:
@@ -160,8 +139,14 @@ class EmojiTriggerListener:
             self.keyboard_controller.release("v")
 
     def _process_trigger(self):
+        cancel_event = self._cancel_event
+        trigger_time = self._last_trigger_time
+
         try:
             time.sleep(self.trigger_delay)
+            if cancel_event.is_set():
+                print("[EmojiTrigger] Cancelled after delay")
+                return
 
             selected = get_selected_text()
             cleaned_text = self._validate_selection(selected)
@@ -197,6 +182,14 @@ class EmojiTriggerListener:
             if fallback_mode:
                 emoji_text = self.fallback_emoji
 
+            if cancel_event.is_set():
+                print("[EmojiTrigger] Cancelled after API response")
+                return
+
+            if not fallback_mode and time.time() - trigger_time > self._window_seconds:
+                print("[EmojiTrigger] Execution window expired, discarding")
+                return
+
             latest_selected = get_selected_text()
             latest_cleaned = latest_selected.replace("\r", " ").replace("\n", " ").strip() if latest_selected else ""
             if not latest_cleaned:
@@ -204,6 +197,10 @@ class EmojiTriggerListener:
                 return
             if latest_cleaned != cleaned_text:
                 print("[EmojiTrigger] Selection changed during API wait, continuing with non-empty selection")
+
+            if cancel_event.is_set():
+                print("[EmojiTrigger] Cancelled before insert")
+                return
 
             self._insert_emoji(emoji_text)
             print(f"[EmojiTrigger] Inserted emoji '{emoji_text}' after '{cleaned_text}'")

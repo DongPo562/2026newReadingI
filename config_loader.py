@@ -578,8 +578,8 @@ class Config:
         return self.config.getfloat('EmojiTrigger', 'trigger_delay', fallback=0.02)
 
     @property
-    def emoji_trigger_debounce_interval(self) -> float:
-        return self.config.getfloat('EmojiTrigger', 'debounce_interval', fallback=0.5)
+    def emoji_trigger_execution_window_seconds(self) -> float:
+        return self.config.getfloat('EmojiTrigger', 'execution_window_seconds', fallback=8.0)
 
     @property
     def emoji_trigger_api_timeout(self) -> float:
