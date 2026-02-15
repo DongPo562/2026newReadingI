@@ -1,0 +1,1 @@
+What emoji(s) best represent the meaning of "{{content}}"? Reply with 1 to 3 emojis only, nothing else.

@@ -18,5 +18,13 @@ rollback/
 # Ignore README
 README.md
 
-# Ignore all first-level folders and everything inside them
-*/
+# Ignore first-level folders by default
+/*/
+
+# Keep prompt templates synced
+!/prompts/
+!/prompts/**
+
+# If you need to sync another first-level folder later, add:
+# !/your-folder/
+# !/your-folder/**

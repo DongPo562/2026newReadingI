@@ -12,6 +12,15 @@ class Config:
             raise FileNotFoundError(f"Config file not found: {config_path}")
         self.config.read(config_path)
 
+    def _resolve_config_path(self, raw_path: str, fallback: str = '') -> str:
+        path = (raw_path or '').strip() or fallback
+        if not path:
+            return ''
+        if os.path.isabs(path):
+            return os.path.normpath(path)
+        base_dir = os.path.dirname(os.path.abspath(self.config_path))
+        return os.path.normpath(os.path.join(base_dir, path))
+
     def reload(self):
         self.config = configparser.ConfigParser()
         self.config.read(self.config_path)
@@ -564,6 +573,16 @@ class Config:
         """是否启用 reasoning（思维链）"""
         return self.config.getboolean('QuizTrigger', 'enable_reasoning', fallback=False)
 
+    @property
+    def quiz_trigger_question_prompt_file(self) -> str:
+        raw = self.config.get('QuizTrigger', 'question_prompt_file', fallback='prompts/question_prompt.txt')
+        return self._resolve_config_path(raw)
+
+    @property
+    def quiz_trigger_grade_prompt_file(self) -> str:
+        raw = self.config.get('QuizTrigger', 'grade_prompt_file', fallback='prompts/grade_prompt.txt')
+        return self._resolve_config_path(raw)
+
     # ==================== EmojiTrigger 配置 ====================
     @property
     def emoji_trigger_enabled(self) -> bool:
@@ -600,6 +619,11 @@ class Config:
     @property
     def emoji_trigger_enable_reasoning(self) -> bool:
         return self.config.getboolean('EmojiTrigger', 'enable_reasoning', fallback=False)
+
+    @property
+    def emoji_trigger_prompt_file(self) -> str:
+        raw = self.config.get('EmojiTrigger', 'emoji_prompt_file', fallback='prompts/emoji_prompt.txt')
+        return self._resolve_config_path(raw)
 
     # ==================== QuizCard 配置 ====================
     @property

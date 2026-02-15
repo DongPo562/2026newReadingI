@@ -80,6 +80,31 @@ REQUEST_RETRY_COUNT = 1
 REQUEST_RETRY_BACKOFF_SECONDS = 0.8
 RETRYABLE_HTTP_CODES = {408, 409, 425, 429, 500, 502, 503, 504}
 
+DEFAULT_QUESTION_PROMPT_TEMPLATE = """你是一位资深英语老师，致力于通过多样化的题型帮助学生深度掌握知识点。请根据用户选中的知识点【{{content}}】（上下文：【{{sentence_content}}】），灵活设计一道英语练习题。请根据知识点的特性（单词/短语/句子）从以下题型中随机选择最合适的一种：
+
+1. **选择题 (type: choice)**：
+- 同义词/反义词辨析（如：accumulate vs collect）；
+- 固定搭配介词选择（如：disconnect [from]）；
+- 短语含义理解（选出正确解释）。
+
+2. **填空题 (type: fill)**：
+- 语境完形：挖空原句或新句中的关键短语，考察拼写；
+- 翻译填空：给出中文提示，要求填写对应的英文短语（如：把某人引向歧途 -> [take sb down the wrong road]）。
+
+3. **问答题 (type: qa)**：
+- 句子改写 (Rewrite)：给出一个意思相近的句子，要求用本知识点改写；
+- 造句练习 (Make a sentence)：要求用该知识点造一个新句；
+- 概念解释 (Explain)：询问该词与近义词的区别（如：confidence vs charisma）或深度解释概念含义。
+
+**输出约束**：
+- 必须严格返回合法的 JSON 格式，不要包含 ```json 标记或其他文字。
+- JSON 字段必须包含：type (仅限 choice/fill/qa), question (题目文本), options (仅选择题需要，4个字符串的数组), answer (标准答案字符串)。
+- 题目设计应避免与原句完全重复，尽量提供新的语境或视角。"""
+
+DEFAULT_GRADE_PROMPT_TEMPLATE = """用户是一名母语为中文的英语学习者，以下是一道英语考题和用户的答案，请批改。题目：{{question}}，用户答案：{{user_answer}}，标准答案：{{answer}}。首先告诉用户答对或者答错。如果答对了，给出简单赞赏语句，并且对题目做出分析和讲解。如果答错了，回复非常遗憾，然后给出错题讲解。请直接返回批改文本。"""
+
+DEFAULT_EMOJI_PROMPT_TEMPLATE = """What emoji(s) best represent the meaning of "{{content}}"? Reply with 1 to 3 emojis only, nothing else."""
+
 
 class AIServiceSignals(QObject):
     question_ready = pyqtSignal(int, str)
@@ -168,6 +193,29 @@ class AIService:
             self._last_model_id = current_mid
             self._log_config()
 
+    def _load_prompt_template(self, prompt_name, file_path, default_template):
+        if file_path:
+            try:
+                if os.path.exists(file_path):
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        text = f.read().strip()
+                    if text:
+                        print(f"[AIService] Prompt '{prompt_name}' source=config file={file_path}")
+                        return text
+                    print(f"[AIService] Prompt '{prompt_name}' file is empty, fallback to default")
+                else:
+                    print(f"[AIService] Prompt '{prompt_name}' file not found: {file_path}; fallback to default")
+            except Exception as e:
+                print(f"[AIService] Prompt '{prompt_name}' read failed: {e}; fallback to default")
+        print(f"[AIService] Prompt '{prompt_name}' source=default")
+        return default_template
+
+    def _render_prompt_template(self, template, variables):
+        text = template or ""
+        for key, value in variables.items():
+            text = text.replace("{{" + key + "}}", "" if value is None else str(value))
+        return text.strip()
+
     def shutdown(self):
         self.executor.shutdown(wait=False, cancel_futures=True)
 
@@ -183,25 +231,14 @@ class AIService:
         return self.executor.submit(self._generate_emoji_worker, content)
 
     def _build_question_prompt(self, content, sentence_content):
-        return (
-            "你是一位资深英语老师，致力于通过多样化的题型帮助学生深度掌握知识点。"
-            f"请根据用户选中的知识点【{content}】（上下文：【{sentence_content}】），"
-            "灵活设计一道英语练习题。请根据知识点的特性（单词/短语/句子）从以下题型中随机选择最合适的一种："
-            "\n\n1. **选择题 (type: choice)**："
-            "- 同义词/反义词辨析（如：accumulate vs collect）；"
-            "- 固定搭配介词选择（如：disconnect [from]）；"
-            "- 短语含义理解（选出正确解释）。"
-            "\n\n2. **填空题 (type: fill)**："
-            "- 语境完形：挖空原句或新句中的关键短语，考察拼写；"
-            "- 翻译填空：给出中文提示，要求填写对应的英文短语（如：把某人引向歧途 -> [take sb down the wrong road]）。"
-            "\n\n3. **问答题 (type: qa)**："
-            "- 句子改写 (Rewrite)：给出一个意思相近的句子，要求用本知识点改写；"
-            "- 造句练习 (Make a sentence)：要求用该知识点造一个新句；"
-            "- 概念解释 (Explain)：询问该词与近义词的区别（如：confidence vs charisma）或深度解释概念含义。"
-            "\n\n**输出约束**："
-            "- 必须严格返回合法的 JSON 格式，不要包含 ```json 标记或其他文字。"
-            "- JSON 字段必须包含：type (仅限 choice/fill/qa), question (题目文本), options (仅选择题需要，4个字符串的数组), answer (标准答案字符串)。"
-            "- 题目设计应避免与原句完全重复，尽量提供新的语境或视角。"
+        template = self._load_prompt_template(
+            "quiz_question",
+            app_config.quiz_trigger_question_prompt_file,
+            DEFAULT_QUESTION_PROMPT_TEMPLATE,
+        )
+        return self._render_prompt_template(
+            template,
+            {"content": content, "sentence_content": sentence_content},
         )
 
     def _generate_local_fill(self, content, sentence_content):
@@ -214,6 +251,7 @@ class AIService:
         )
 
     def _generate_question_worker(self, question_id, content, sentence_content):
+        self._check_model_change()
         fallback_json = self._generate_local_fill(content, sentence_content)
         try:
             raw = self._request_llm(self._build_question_prompt(content, sentence_content))
@@ -228,12 +266,20 @@ class AIService:
             return "failed", fallback_json
 
     def _grade_answer_worker(self, question_json, user_answer):
+        self._check_model_change()
         data = json.loads(question_json)
-        prompt = (
-            "用户是一名母语为中文的英语学习者，以下是一道英语考题和用户的答案，请批改。"
-            f"题目：{data.get('question', '')}，用户答案：{user_answer}，标准答案：{data.get('answer', '')}。"
-            "首先告诉用户答对或者答错。如果答对了，给出简单赞赏语句，并且对题目做出分析和讲解。"
-            "如果答错了，回复非常遗憾，然后给出错题讲解。请直接返回批改文本。"
+        template = self._load_prompt_template(
+            "quiz_grade",
+            app_config.quiz_trigger_grade_prompt_file,
+            DEFAULT_GRADE_PROMPT_TEMPLATE,
+        )
+        prompt = self._render_prompt_template(
+            template,
+            {
+                "question": data.get("question", ""),
+                "user_answer": user_answer,
+                "answer": data.get("answer", ""),
+            },
         )
         try:
             return self._request_llm(prompt)
@@ -256,10 +302,12 @@ class AIService:
         )
 
     def _build_emoji_prompt(self, content):
-        return (
-            f'What emoji(s) best represent the meaning of "{content}"? '
-            "Reply with 1 to 3 emojis only, nothing else."
+        template = self._load_prompt_template(
+            "emoji",
+            app_config.emoji_trigger_prompt_file,
+            DEFAULT_EMOJI_PROMPT_TEMPLATE,
         )
+        return self._render_prompt_template(template, {"content": content})
 
     def _extract_emojis(self, text):
         if not text:
@@ -277,6 +325,7 @@ class AIService:
         return "".join(matches[:3])
 
     def _generate_emoji_worker(self, content):
+        self._check_model_change()
         raw = self._request_llm(self._build_emoji_prompt(content))
         emojis = self._extract_emojis(raw)
         if emojis:
